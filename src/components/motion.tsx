@@ -293,6 +293,72 @@ export function SpringBar({
 }
 
 /**
+ * A 3D stage for a chart.
+ *
+ * Deliberately gentler than `TiltCard`: a chart is something you read values
+ * off, and past about 3° the axis labels start to shear and a figure becomes
+ * harder to compare against the one next to it. Depth here is for separation,
+ * not for spectacle.
+ *
+ * The parallax is real rather than suggested. Recharts renders everything into
+ * a single `<svg>`, and `translateZ` on an SVG `<g>` does not reliably create
+ * 3D separation, so the depth comes from a sibling DOM layer sitting behind the
+ * chart at `translateZ(-40px)`. When the stage tilts, that backdrop shifts
+ * against the plot — which is what the eye actually reads as depth.
+ */
+export function ChartStage({
+  children,
+  className,
+  backdrop = true,
+  maxTilt = 3,
+  ...props
+}: React.HTMLAttributes<HTMLDivElement> & { backdrop?: boolean; maxTilt?: number }) {
+  const ref = React.useRef<HTMLDivElement>(null);
+  const hasHover = useHasHover();
+  const active = hasHover && !prefersReducedMotion();
+
+  const onMove = React.useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      const el = ref.current;
+      if (!el) return;
+      const rect = el.getBoundingClientRect();
+      const { x, y } = normalisedPointer(rect, e.clientX, e.clientY);
+      el.style.setProperty('--tilt-x', `${(-y * maxTilt).toFixed(2)}deg`);
+      el.style.setProperty('--tilt-y', `${(x * maxTilt).toFixed(2)}deg`);
+      // The spotlight follows in element-local percentages so it works at any
+      // width without recomputing anything on resize.
+      el.style.setProperty('--spot-x', `${((x + 1) / 2) * 100}%`);
+      el.style.setProperty('--spot-y', `${((y + 1) / 2) * 100}%`);
+      el.style.setProperty('--spot-o', '1');
+    },
+    [maxTilt],
+  );
+
+  const reset = React.useCallback(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.style.setProperty('--tilt-x', '0deg');
+    el.style.setProperty('--tilt-y', '0deg');
+    el.style.setProperty('--spot-o', '0');
+  }, []);
+
+  return (
+    <div className={cn('chart-stage', className)} {...props}>
+      <div
+        ref={ref}
+        className="chart-stage__plane"
+        onPointerMove={active ? onMove : undefined}
+        onPointerLeave={active ? reset : undefined}
+      >
+        {backdrop && <div className="chart-stage__depth" aria-hidden />}
+        <div className="chart-stage__content">{children}</div>
+        <div className="chart-stage__spot" aria-hidden />
+      </div>
+    </div>
+  );
+}
+
+/**
  * Press feedback.
  *
  * Scales down on pointer-down and springs back on release. The whole trick is

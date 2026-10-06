@@ -231,114 +231,112 @@
    No WebGL, no 3D engine, no bytes.
    --------------------------------------------------------------------------- */
 
-@layer components {
-  /* The perspective lives on the grid, not the card. Per-card perspective
-     makes every tile its own vanishing point, so a row of them tilts like
-     separate photographs rather than like one surface. */
-  .tilt-scene {
-    perspective: 1200px;
-    perspective-origin: 50% 50%;
-  }
+/* The perspective lives on the grid, not the card. Per-card perspective
+   makes every tile its own vanishing point, so a row of them tilts like
+   separate photographs rather than like one surface. */
+.tilt-scene {
+  perspective: 1200px;
+  perspective-origin: 50% 50%;
+}
 
-  .tilt-card {
-    --tilt-x: 0deg;
-    --tilt-y: 0deg;
-    --tilt-z: 0px;
-    transform: rotateX(var(--tilt-x)) rotateY(var(--tilt-y)) translateZ(var(--tilt-z));
-    transform-style: preserve-3d;
-    transition: transform 420ms cubic-bezier(0.22, 1, 0.36, 1);
-    /* Promote once, up front. Without this the first tilt of each card pays
-       for layer creation and visibly stutters. */
-    will-change: transform;
-  }
+.tilt-card {
+  --tilt-x: 0deg;
+  --tilt-y: 0deg;
+  --tilt-z: 0px;
+  transform: rotateX(var(--tilt-x)) rotateY(var(--tilt-y)) translateZ(var(--tilt-z));
+  transform-style: preserve-3d;
+  transition: transform 420ms cubic-bezier(0.22, 1, 0.36, 1);
+  /* Promote once, up front. Without this the first tilt of each card pays
+     for layer creation and visibly stutters. */
+  will-change: transform;
+}
 
-  /* While the pointer is moving, shorten the transition so the card tracks the
-     cursor instead of lagging behind it; the long ease is for the return. */
-  .tilt-card:hover {
-    transition-duration: 90ms;
-  }
+/* While the pointer is moving, shorten the transition so the card tracks the
+   cursor instead of lagging behind it; the long ease is for the return. */
+.tilt-card:hover {
+  transition-duration: 90ms;
+}
 
-  /* A specular highlight that follows the cursor. Sells the surface as
-     something with an angle to it, which is most of why a tilt reads as 3D
-     rather than as a skew. */
-  .tilt-card--glare {
-    position: relative;
-    --glare-x: 50%;
-    --glare-y: 50%;
-    --glare-o: 0;
-  }
+/* A specular highlight that follows the cursor. Sells the surface as
+   something with an angle to it, which is most of why a tilt reads as 3D
+   rather than as a skew. */
+.tilt-card--glare {
+  position: relative;
+  --glare-x: 50%;
+  --glare-y: 50%;
+  --glare-o: 0;
+}
 
-  .tilt-card--glare::after {
-    content: '';
-    position: absolute;
-    inset: 0;
-    border-radius: inherit;
-    pointer-events: none;
-    opacity: var(--glare-o);
-    transition: opacity 260ms ease;
-    background: radial-gradient(
-      380px circle at var(--glare-x) var(--glare-y),
-      color-mix(in oklab, var(--color-primary) 16%, transparent),
-      transparent 60%
-    );
-  }
+.tilt-card--glare::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  opacity: var(--glare-o);
+  transition: opacity 260ms ease;
+  background: radial-gradient(
+    380px circle at var(--glare-x) var(--glare-y),
+    color-mix(in oklab, var(--color-primary) 16%, transparent),
+    transparent 60%
+  );
+}
 
-  .magnetic {
-    --mag-x: 0px;
-    --mag-y: 0px;
-    display: inline-flex;
-    transform: translate3d(var(--mag-x), var(--mag-y), 0);
-    transition: transform 380ms cubic-bezier(0.22, 1, 0.36, 1);
-  }
+.magnetic {
+  --mag-x: 0px;
+  --mag-y: 0px;
+  display: inline-flex;
+  transform: translate3d(var(--mag-x), var(--mag-y), 0);
+  transition: transform 380ms cubic-bezier(0.22, 1, 0.36, 1);
+}
 
-  .magnetic:hover {
-    transition-duration: 110ms;
-  }
+.magnetic:hover {
+  transition-duration: 110ms;
+}
 
-  .reveal {
-    --reveal-delay: 0ms;
-    opacity: 0;
-    transform: translate3d(0, 14px, 0);
-    transition:
-      opacity 520ms cubic-bezier(0.22, 1, 0.36, 1) var(--reveal-delay),
-      transform 520ms cubic-bezier(0.22, 1, 0.36, 1) var(--reveal-delay);
-  }
+.reveal {
+  --reveal-delay: 0ms;
+  opacity: 0;
+  transform: translate3d(0, 14px, 0);
+  transition:
+    opacity 520ms cubic-bezier(0.22, 1, 0.36, 1) var(--reveal-delay),
+    transform 520ms cubic-bezier(0.22, 1, 0.36, 1) var(--reveal-delay);
+}
 
-  .reveal[data-revealed] {
-    opacity: 1;
-    transform: none;
-  }
+.reveal[data-revealed] {
+  opacity: 1;
+  transform: none;
+}
 
-  .pressable {
-    --press-scale: 0.97;
-    transition: transform 240ms cubic-bezier(0.22, 1, 0.36, 1);
-  }
+.pressable {
+  --press-scale: 0.97;
+  transition: transform 240ms cubic-bezier(0.22, 1, 0.36, 1);
+}
 
-  .pressable:active {
-    transform: scale(var(--press-scale));
-    transition-duration: 60ms;
-  }
+.pressable:active {
+  transform: scale(var(--press-scale));
+  transition-duration: 60ms;
+}
 
-  /* A slow sheen for skeletons. Translating a gradient beats animating
-     background-position, which repaints the element every frame. */
-  .shimmer {
-    position: relative;
-    overflow: hidden;
-  }
+/* A slow sheen for skeletons. Translating a gradient beats animating
+   background-position, which repaints the element every frame. */
+.shimmer {
+  position: relative;
+  overflow: hidden;
+}
 
-  .shimmer::after {
-    content: '';
-    position: absolute;
-    inset: 0;
-    transform: translateX(-100%);
-    background: linear-gradient(
-      90deg,
-      transparent,
-      color-mix(in oklab, var(--color-foreground) 8%, transparent),
-      transparent
-    );
-    animation: shimmer 1.6s ease-in-out infinite;
-  }
+.shimmer::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in oklab, var(--color-foreground) 8%, transparent),
+    transparent
+  );
+  animation: shimmer 1.6s ease-in-out infinite;
 }
 
 @keyframes shimmer {
@@ -378,5 +376,122 @@
 
   .animate-fade-in {
     animation: none;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Chart stage
+   ---------------------------------------------------------------------------
+   Depth for charts, which need a lighter touch than cards: these carry precise
+   values, and a steep tilt shears the axis labels and makes two figures harder
+   to compare. 3° of travel, and the separation does the work instead.
+
+   Recharts renders a chart as one <svg>, and translateZ on an SVG <g> does not
+   reliably create 3D separation, so the parallax comes from a sibling DOM layer
+   behind the plot rather than from the chart's own internals.
+   --------------------------------------------------------------------------- */
+
+.chart-stage {
+  perspective: 1400px;
+  perspective-origin: 50% 45%;
+}
+
+.chart-stage__plane {
+  --tilt-x: 0deg;
+  --tilt-y: 0deg;
+  position: relative;
+  transform: rotateX(var(--tilt-x)) rotateY(var(--tilt-y));
+  transform-style: preserve-3d;
+  transition: transform 500ms cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: transform;
+}
+
+.chart-stage__plane:hover {
+  transition-duration: 110ms;
+}
+
+/* The layer that sells the depth. Pushed back far enough to shift visibly
+   against the plot when the stage tilts, and faint enough that it never
+   competes with the data. */
+.chart-stage__depth {
+  position: absolute;
+  inset: -6% -3%;
+  transform: translateZ(-40px);
+  border-radius: 1rem;
+  pointer-events: none;
+  background:
+    radial-gradient(
+      60% 50% at 50% 40%,
+      color-mix(in oklab, var(--color-primary) 10%, transparent),
+      transparent 70%
+    ),
+    repeating-linear-gradient(
+      90deg,
+      color-mix(in oklab, var(--color-border) 55%, transparent) 0 1px,
+      transparent 1px 44px
+    );
+  opacity: 0.5;
+}
+
+/* The plot itself sits forward of the backdrop. */
+.chart-stage__content {
+  position: relative;
+  transform: translateZ(18px);
+}
+
+.chart-stage__spot {
+  --spot-x: 50%;
+  --spot-y: 50%;
+  --spot-o: 0;
+  position: absolute;
+  inset: 0;
+  transform: translateZ(26px);
+  pointer-events: none;
+  opacity: var(--spot-o);
+  transition: opacity 300ms ease;
+  background: radial-gradient(
+    300px circle at var(--spot-x) var(--spot-y),
+    color-mix(in oklab, var(--color-foreground) 7%, transparent),
+    transparent 65%
+  );
+}
+
+/* The extruded pie sector. The filter is what reads as "lifted" — without a
+   shadow a bigger radius just looks like a bigger slice. */
+.sector-lift {
+  filter: drop-shadow(0 6px 14px color-mix(in oklab, black 45%, transparent));
+  transition: filter 220ms ease;
+}
+
+/* Legend row linked to the chart. */
+.legend-row {
+  border-radius: 0.375rem;
+  padding-inline: 0.25rem;
+  transition:
+    background-color 200ms ease,
+    opacity 200ms ease,
+    transform 200ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.legend-row[data-active] {
+  background: var(--color-accent);
+  transform: translateX(2px);
+}
+
+
+@media (prefers-reduced-motion: reduce) {
+  .chart-stage__plane,
+  .legend-row {
+    transform: none !important;
+    transition: none !important;
+  }
+
+  .chart-stage__spot {
+    display: none;
+  }
+
+  .sector-lift {
+    filter: none;
+    transition: none;
   }
 }

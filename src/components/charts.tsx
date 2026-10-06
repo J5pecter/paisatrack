@@ -21,6 +21,7 @@ import {
   PieChart,
   ReferenceLine,
   ResponsiveContainer,
+  Sector,
   Tooltip as RechartsTooltip,
   XAxis,
   YAxis,
@@ -28,6 +29,9 @@ import {
 import { formatCompactINR, formatINR, toRupees } from '@/lib/finance/money';
 import { formatMonthKey } from '@/lib/finance/dates';
 import { humanise } from '@/lib/utils';
+import { ChartStage } from '@/components/motion';
+import { prefersReducedMotion } from '@/lib/motion';
+import type { PieSectorDataItem } from 'recharts/types/polar/Pie';
 import { CHART_COLOURS, colourFor } from './chartPalette';
 import type { CategorySpend, MonthlyTrendPoint } from '@/lib/finance/dashboard';
 import type { Paise } from '@/types';
@@ -97,36 +101,101 @@ export function CategoryDonut({ data, height = 260 }: { data: CategorySpend[]; h
 
   const total = React.useMemo(() => data.reduce((s, d) => s + d.amount, 0), [data]);
 
+  /**
+   * Which slice the pointer is on.
+   *
+   * Recharts 3 dropped `activeIndex` from `Pie` — the active sector is now
+   * decided internally from hover and handed to `activeShape`. The mouse
+   * callbacks still report the index, so this mirrors that state for the
+   * centre readout and the legend, rather than trying to drive Recharts from
+   * the outside.
+   */
+  const [active, setActive] = React.useState<number | null>(null);
+  const shown = active !== null ? rows[active] : null;
+
   return (
     <div className="relative">
-      <ResponsiveContainer width="100%" height={height}>
-        <PieChart>
-          <Pie
-            data={rows}
-            dataKey="value"
-            nameKey="name"
-            innerRadius="58%"
-            outerRadius="86%"
-            paddingAngle={2}
-            strokeWidth={0}
-          >
-            {rows.map((row) => (
-              <Cell key={row.name} fill={colourFor(row.name)} />
-            ))}
-          </Pie>
-          <RechartsTooltip content={<MoneyTooltip />} />
-        </PieChart>
-      </ResponsiveContainer>
+      <ChartStage backdrop={false}>
+        <ResponsiveContainer width="100%" height={height}>
+          <PieChart>
+            <Pie
+              data={rows}
+              dataKey="value"
+              nameKey="name"
+              innerRadius="58%"
+              outerRadius="86%"
+              paddingAngle={2}
+              strokeWidth={0}
+              onMouseEnter={(_, i) => setActive(i)}
+              onMouseLeave={() => setActive(null)}
+              // The hovered sector grows outward and gains a shadow, so it
+              // reads as lifted off the ring rather than merely larger.
+              activeShape={(props: PieSectorDataItem) => (
+                <Sector
+                  {...props}
+                  // Proportional, not a fixed +10px. The ring ends at 86% of
+                  // the available radius, so there is ~14% of headroom; 8%
+                  // always fits inside it, where a constant would clip against
+                  // the SVG edge once the container got small enough.
+                  outerRadius={(props.outerRadius ?? 0) * 1.08}
+                  className="sector-lift"
+                />
+              )}
+              // Everything else recedes. Dimming the rest is what makes the
+              // lift legible — a shadow alone is easy to miss at this size.
+              inactiveShape={(props: PieSectorDataItem) => (
+                <Sector {...props} opacity={0.45} />
+              )}
+            >
+              {rows.map((row) => (
+                <Cell key={row.name} fill={colourFor(row.name)} />
+              ))}
+            </Pie>
+            <RechartsTooltip content={<MoneyTooltip />} />
+          </PieChart>
+        </ResponsiveContainer>
+      </ChartStage>
 
-      {/* Total sits in the hole, which is the number people look for first. */}
+      {/*
+        The hole. Shows the total until a slice is hovered, then that slice —
+        which is the whole point of hovering it. `aria-live` is deliberately
+        off: this mirrors a pointer-only affordance, and announcing every
+        slice as the mouse crosses the ring would be unusable.
+      */}
       <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
-        <span className="text-xs text-[var(--color-muted-foreground)]">Total</span>
-        <span className="tnum text-lg font-semibold">{formatCompactINR(total)}</span>
+        {shown ? (
+          <>
+            <span className="max-w-[7rem] truncate text-xs text-[var(--color-muted-foreground)]">
+              {shown.name}
+            </span>
+            <span className="tnum text-lg font-semibold">{formatCompactINR(shown.paise)}</span>
+            <span className="tnum text-xs text-[var(--color-muted-foreground)]">
+              {shown.percent.toFixed(0)}% of spend
+            </span>
+          </>
+        ) : (
+          <>
+            <span className="text-xs text-[var(--color-muted-foreground)]">Total</span>
+            <span className="tnum text-lg font-semibold">{formatCompactINR(total)}</span>
+          </>
+        )}
       </div>
 
       <ul className="mt-4 grid gap-x-4 gap-y-1.5 sm:grid-cols-2">
-        {rows.map((row) => (
-          <li key={row.name} className="flex items-center gap-2 text-xs">
+        {rows.map((row, i) => (
+          <li
+            key={row.name}
+            className="legend-row flex items-center gap-2 py-0.5 text-xs"
+            data-active={active === i ? '' : undefined}
+            // Opacity is set inline rather than from the stylesheet. The
+            // attribute rule for it refused to apply while its immediate
+            // neighbour `[data-active]` applied fine, and the dim level is
+            // state anyway — driving it from the same place as the state
+            // removes a second source of truth and a cascade to argue with.
+            style={{ opacity: active !== null && active !== i ? 0.4 : 1 }}
+            onPointerEnter={() => setActive(i)}
+            onPointerLeave={() => setActive(null)}
+          >
             <span
               className="h-2 w-2 shrink-0 rounded-full"
               style={{ backgroundColor: colourFor(row.name) }}
@@ -162,33 +231,69 @@ export function TrendChart({ data, height = 280 }: { data: MonthlyTrendPoint[]; 
     [data],
   );
 
+  // Read once per mount, like the count-up in `Money`. A live change to the
+  // setting is rare enough not to be worth a listener here, and getting it
+  // wrong in the other direction — animating for someone who asked not to —
+  // is the failure that actually matters.
+  const still = prefersReducedMotion();
+
   return (
-    <ResponsiveContainer width="100%" height={height}>
-      <ComposedChart data={rows} margin={{ top: 8, right: 4, left: -16, bottom: 0 }}>
-        <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" vertical={false} />
-        <XAxis dataKey="month" tickFormatter={(m) => formatMonthKey(m).slice(0, 3)} {...AXIS} />
-        <YAxis tickFormatter={(v) => formatCompactINR(Math.round(v * 100), { noSymbol: true })} {...AXIS} />
-        <RechartsTooltip
-          content={<MoneyTooltip />}
-          labelFormatter={(label) => formatMonthKey(String(label))}
-        />
-        <Legend
-          wrapperStyle={{ fontSize: 11, paddingTop: 8 }}
-          iconType="circle"
-          iconSize={7}
-        />
-        <Bar dataKey="Spending" fill={CHART_COLOURS[4]} radius={[3, 3, 0, 0]} maxBarSize={28} />
-        <Bar dataKey="EMI" fill={CHART_COLOURS[3]} radius={[3, 3, 0, 0]} maxBarSize={28} stackId="out" />
-        <Line
-          type="monotone"
-          dataKey="Income"
-          stroke={CHART_COLOURS[0]}
-          strokeWidth={2}
-          dot={false}
-          activeDot={{ r: 4 }}
-        />
-      </ComposedChart>
-    </ResponsiveContainer>
+    <ChartStage>
+      <ResponsiveContainer width="100%" height={height}>
+        <ComposedChart data={rows} margin={{ top: 8, right: 4, left: -16, bottom: 0 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" vertical={false} />
+          <XAxis dataKey="month" tickFormatter={(m) => formatMonthKey(m).slice(0, 3)} {...AXIS} />
+          <YAxis tickFormatter={(v) => formatCompactINR(Math.round(v * 100), { noSymbol: true })} {...AXIS} />
+          <RechartsTooltip
+            content={<MoneyTooltip />}
+            labelFormatter={(label) => formatMonthKey(String(label))}
+            cursor={{ fill: 'color-mix(in oklab, var(--color-foreground) 6%, transparent)' }}
+          />
+          <Legend wrapperStyle={{ fontSize: 11, paddingTop: 8 }} iconType="circle" iconSize={7} />
+
+          {/*
+            Staged entrance: the bars rise, then the income line draws across
+            them. Sequencing it this way means the line is read *against* the
+            spending rather than alongside it, which is the comparison the
+            chart exists to make. The offsets are small — past about half a
+            second a chart stops feeling alive and starts feeling slow.
+          */}
+          <Bar
+            dataKey="Spending"
+            fill={CHART_COLOURS[4]}
+            radius={[3, 3, 0, 0]}
+            maxBarSize={28}
+            isAnimationActive={!still}
+            animationBegin={0}
+            animationDuration={520}
+            animationEasing="ease-out"
+          />
+          <Bar
+            dataKey="EMI"
+            fill={CHART_COLOURS[3]}
+            radius={[3, 3, 0, 0]}
+            maxBarSize={28}
+            stackId="out"
+            isAnimationActive={!still}
+            animationBegin={110}
+            animationDuration={520}
+            animationEasing="ease-out"
+          />
+          <Line
+            type="monotone"
+            dataKey="Income"
+            stroke={CHART_COLOURS[0]}
+            strokeWidth={2}
+            dot={false}
+            activeDot={{ r: 5, strokeWidth: 0 }}
+            isAnimationActive={!still}
+            animationBegin={320}
+            animationDuration={680}
+            animationEasing="ease-out"
+          />
+        </ComposedChart>
+      </ResponsiveContainer>
+    </ChartStage>
   );
 }
 
