@@ -273,9 +273,39 @@ class SyncEngine {
     if (!config?.token) return null;
 
     const queued = await db._syncQueue.toArray();
+
+    /**
+     * An empty queue does NOT mean the remote is up to date.
+     *
+     * Only writes that go through `repository.ts` enqueue anything. The seeder
+     * writes to Dexie directly (it has to — Dexie's transaction zone does not
+     * survive an async wrapper), and nothing written before sync was configured
+     * was ever queued either. Gating the push purely on the queue meant a
+     * freshly connected device uploaded nothing at all, reported IDLE, and left
+     * the user believing their data was backed up when `data.json` did not even
+     * exist in the repo. For a feature whose entire purpose is backup, silently
+     * doing nothing while reporting success is the worst available outcome.
+     *
+     * `lastSha` is only ever set from a file we have actually read, so having
+     * one proves the remote exists and we can take the cheap path. Without one
+     * we ask — and we ask with NO ETag on purpose, because a 304 is impossible
+     * without one, which makes a null answer unambiguously "404, never created"
+     * rather than "unchanged".
+     */
+    let initialUpload = false;
     if (queued.length === 0) {
-      this.setState({ status: 'IDLE' });
-      return { committed: false };
+      if (this.lastSha !== undefined) {
+        this.setState({ status: 'IDLE' });
+        return { committed: false };
+      }
+
+      const existing = await readDataFile(config, undefined);
+      if (existing) {
+        this.lastSha = existing.sha;
+        this.setState({ status: 'IDLE' });
+        return { committed: false };
+      }
+      initialUpload = true;
     }
 
     if (typeof navigator !== 'undefined' && !navigator.onLine) {
@@ -302,8 +332,18 @@ class SyncEngine {
         this.lastEtag = remote.etag;
       }
 
+      // On an initial upload the queue is empty by definition, so counting it
+      // would produce "sync: no changes" on the very commit that creates the
+      // file. Count what is actually being written instead.
       const counts: Partial<Record<SyncTable, number>> = {};
-      for (const item of queued) counts[item.table] = (counts[item.table] ?? 0) + 1;
+      if (initialUpload) {
+        for (const table of SYNC_TABLES) {
+          const n = merged[table]?.length ?? 0;
+          if (n > 0) counts[table] = n;
+        }
+      } else {
+        for (const item of queued) counts[item.table] = (counts[item.table] ?? 0) + 1;
+      }
 
       const deviceId = getDeviceId();
       const body = serialisePayload(buildPayload(merged, deviceId));
