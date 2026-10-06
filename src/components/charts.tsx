@@ -264,6 +264,8 @@ export function TrendChart({ data, height = 280 }: { data: MonthlyTrendPoint[]; 
             fill={CHART_COLOURS[4]}
             radius={[3, 3, 0, 0]}
             maxBarSize={28}
+            fillOpacity={0.72}
+            activeBar={{ fillOpacity: 1 }}
             isAnimationActive={!still}
             animationBegin={0}
             animationDuration={760}
@@ -275,6 +277,8 @@ export function TrendChart({ data, height = 280 }: { data: MonthlyTrendPoint[]; 
             radius={[3, 3, 0, 0]}
             maxBarSize={28}
             stackId="out"
+            fillOpacity={0.72}
+            activeBar={{ fillOpacity: 1 }}
             isAnimationActive={!still}
             animationBegin={160}
             animationDuration={760}
@@ -325,16 +329,39 @@ export function SimpleBarChart({
     [data, name],
   );
 
+  const still = prefersReducedMotion();
+
   return (
-    <ResponsiveContainer width="100%" height={height}>
-      <BarChart data={rows} margin={{ top: 8, right: 4, left: -16, bottom: 0 }}>
-        <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" vertical={false} />
-        <XAxis dataKey="label" {...AXIS} />
-        <YAxis tickFormatter={(v) => formatCompactINR(Math.round(v * 100), { noSymbol: true })} {...AXIS} />
-        <RechartsTooltip content={<MoneyTooltip />} cursor={{ fill: 'var(--color-accent)', opacity: 0.4 }} />
-        <Bar dataKey={name} fill={colour} radius={[3, 3, 0, 0]} maxBarSize={36} />
-      </BarChart>
-    </ResponsiveContainer>
+    <ChartStage>
+      <ResponsiveContainer width="100%" height={height}>
+        <BarChart data={rows} margin={{ top: 8, right: 4, left: -16, bottom: 0 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" vertical={false} />
+          <XAxis dataKey="label" {...AXIS} />
+          <YAxis tickFormatter={(v) => formatCompactINR(Math.round(v * 100), { noSymbol: true })} {...AXIS} />
+          <RechartsTooltip content={<MoneyTooltip />} cursor={{ fill: 'var(--color-accent)', opacity: 0.4 }} />
+          <Bar
+            dataKey={name}
+            fill={colour}
+            radius={[3, 3, 0, 0]}
+            maxBarSize={36}
+            /*
+              The series sits slightly back; the hovered bar comes forward.
+              Contrast without React state, deliberately: driving the dim from
+              a useState re-renders the chart on every pointer move, and a
+              re-render restarts Recharts' entrance animation — the bars
+              collapse to zero and grow again, which flickers badly. Recharts
+              resolves activeBar internally, so letting it own the highlight
+              leaves the entrance animation alone.
+            */
+            fillOpacity={0.72}
+            activeBar={{ fillOpacity: 1 }}
+            isAnimationActive={!still}
+            animationDuration={760}
+            animationEasing="ease-out"
+          />
+        </BarChart>
+      </ResponsiveContainer>
+    </ChartStage>
   );
 }
 
@@ -359,8 +386,11 @@ export function UnitsAndAmountChart({
     [data],
   );
 
+  const still = prefersReducedMotion();
+
   return (
-    <ResponsiveContainer width="100%" height={height}>
+    <ChartStage>
+      <ResponsiveContainer width="100%" height={height}>
       <ComposedChart data={rows} margin={{ top: 8, right: 4, left: -16, bottom: 0 }}>
         <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" vertical={false} />
         <XAxis dataKey="month" tickFormatter={(m) => formatMonthKey(m).slice(0, 3)} {...AXIS} />
@@ -390,7 +420,24 @@ export function UnitsAndAmountChart({
           }}
         />
         <Legend wrapperStyle={{ fontSize: 11, paddingTop: 8 }} iconType="circle" iconSize={7} />
-        <Bar yAxisId="units" dataKey="Units" fill={CHART_COLOURS[1]} radius={[3, 3, 0, 0]} maxBarSize={30} />
+        <Bar
+          yAxisId="units"
+          dataKey="Units"
+          fill={CHART_COLOURS[1]}
+          radius={[3, 3, 0, 0]}
+          maxBarSize={30}
+          fillOpacity={0.72}
+          activeBar={{ fillOpacity: 1 }}
+          isAnimationActive={!still}
+          animationDuration={760}
+          animationEasing="ease-out"
+        />
+        {/*
+          The cost line arrives after the unit bars. On an electricity bill the
+          question is whether the cost moved because consumption moved or
+          because the tariff did — so the units land first and the money is
+          drawn over them.
+        */}
         <Line
           yAxisId="amount"
           type="monotone"
@@ -398,9 +445,15 @@ export function UnitsAndAmountChart({
           stroke={CHART_COLOURS[3]}
           strokeWidth={2}
           dot={{ r: 2.5 }}
+          activeDot={{ r: 5, strokeWidth: 2, stroke: 'var(--color-background)' }}
+          isAnimationActive={!still}
+          animationBegin={320}
+          animationDuration={900}
+          animationEasing="ease-out"
         />
-      </ComposedChart>
-    </ResponsiveContainer>
+        </ComposedChart>
+      </ResponsiveContainer>
+    </ChartStage>
   );
 }
 
