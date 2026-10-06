@@ -44,8 +44,25 @@ jobs:
           echo "Wrote snapshots/data-$STAMP.json"
 
       - name: Prune snapshots older than 90 days
+        # Deliberately NOT `find -mtime +90`. A fresh checkout stamps every file
+        # with the checkout time, so by mtime nothing is ever older than a few
+        # seconds and the prune silently never fires — snapshots would pile up
+        # forever while the step reported success. The date in the filename is
+        # the only durable record of when a snapshot was taken, and ISO-8601
+        # dates compare correctly as plain strings.
         run: |
-          find snapshots -name 'data-*.json' -mtime +90 -delete 2>/dev/null || true
+          CUTOFF=$(date -u -d '90 days ago' +%Y-%m-%d)
+          echo "Pruning snapshots dated before $CUTOFF"
+          for f in snapshots/data-*.json; do
+            [ -e "$f" ] || continue
+            name=$(basename "$f" .json)
+            stamp=${name#data-}
+            if [[ "$stamp" < "$CUTOFF" ]]; then
+              rm -f "$f"
+              echo "  pruned $f"
+            fi
+          done
+        shell: bash
 
       - name: Commit
         run: |

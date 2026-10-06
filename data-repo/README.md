@@ -8,7 +8,9 @@ It holds exactly one file that matters: `data.json`.
 It contains your salary, your card balances and your loan details. Before you
 put a token anywhere near it, confirm the repo is private.
 
-PaisaTrack warns you in Settings if it detects a public repo, but check anyway.
+PaisaTrack *refuses* to connect if this repo is public, and re-checks on every
+start — so a repo made public later stops syncing rather than continuing to
+push. Check it yourself anyway.
 
 ## What is in here
 
