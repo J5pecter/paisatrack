@@ -14,6 +14,7 @@ import { AppShell } from '@/components/layout/AppShell';
 import { Dashboard } from '@/pages/Dashboard';
 import { Button, Skeleton } from '@/components/ui';
 
+const Accounts = lazy(() => import('@/pages/Accounts').then((m) => ({ default: m.Accounts })));
 const Expenses = lazy(() => import('@/pages/Expenses').then((m) => ({ default: m.Expenses })));
 const Cards = lazy(() => import('@/pages/Cards').then((m) => ({ default: m.Cards })));
 const Loans = lazy(() => import('@/pages/Loans').then((m) => ({ default: m.Loans })));
@@ -34,6 +35,7 @@ const rootRoute = createRootRoute({
 });
 
 const indexRoute = createRoute({ getParentRoute: () => rootRoute, path: '/', component: Dashboard });
+const accountsRoute = createRoute({ getParentRoute: () => rootRoute, path: '/accounts', component: Accounts });
 const expensesRoute = createRoute({ getParentRoute: () => rootRoute, path: '/expenses', component: Expenses });
 const cardsRoute = createRoute({ getParentRoute: () => rootRoute, path: '/cards', component: Cards });
 const loansRoute = createRoute({ getParentRoute: () => rootRoute, path: '/loans', component: Loans });
@@ -47,6 +49,7 @@ const helpRoute = createRoute({ getParentRoute: () => rootRoute, path: '/help', 
 
 const routeTree = rootRoute.addChildren([
   indexRoute,
+  accountsRoute,
   expensesRoute,
   cardsRoute,
   loansRoute,

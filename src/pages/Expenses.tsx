@@ -174,6 +174,7 @@ export function Expenses() {
         date: todayISO(),
         paymentMethod: e.paymentMethod,
         creditCardId: e.creditCardId ?? null,
+        cashAccountId: e.cashAccountId ?? null,
         isRecurring: e.isRecurring,
         ...(e.notes ? { notes: e.notes } : {}),
       });
@@ -262,6 +263,7 @@ export function Expenses() {
       date: e.date,
       paymentMethod: e.paymentMethod,
       creditCardId: e.creditCardId ?? null,
+      cashAccountId: e.cashAccountId ?? null,
       notes: e.notes ?? '',
     };
   }

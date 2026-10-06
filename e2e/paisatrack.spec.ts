@@ -66,14 +66,19 @@ test.describe('dashboard', () => {
     }
   });
 
-  test('net worth equals investments minus both debts', async ({ page }) => {
+  test('net worth equals cash plus investments minus both debts', async ({ page }) => {
+    const cash = await rupeesOf(page, 'nw-cash');
     const investments = await rupeesOf(page, 'nw-investments');
     const cardDebt = Math.abs(await rupeesOf(page, 'nw-card-debt'));
     const loanDebt = Math.abs(await rupeesOf(page, 'nw-loan-debt'));
     const net = await rupeesOf(page, 'nw-total');
 
+    // Cash was missing from this equation until accounts existed, which meant
+    // every rupee in a wallet or bank was valued at zero.
+    expect(cash, 'seeded data should include cash accounts').toBeGreaterThan(0);
+
     // Each figure is rendered rounded to the rupee, so allow a couple of rupees.
-    expect(Math.abs(net - (investments - cardDebt - loanDebt))).toBeLessThan(3);
+    expect(Math.abs(net - (cash + investments - cardDebt - loanDebt))).toBeLessThan(3);
   });
 
   test('upcoming dues are ordered soonest first', async ({ page }) => {
@@ -250,7 +255,7 @@ test.describe('income', () => {
 });
 
 test.describe('navigation and layout', () => {
-  const ROUTES = ['', 'expenses', 'cards', 'loans', 'bills', 'income', 'budgets', 'investments', 'reports', 'settings', 'help'];
+  const ROUTES = ['', 'accounts', 'expenses', 'cards', 'loans', 'bills', 'income', 'budgets', 'investments', 'reports', 'settings', 'help'];
 
   test('every route loads without a crash', async ({ page }) => {
     await freshApp(page);
@@ -310,7 +315,7 @@ test.describe('navigation and layout', () => {
     const sheet = page.getByRole('dialog');
     await expect(sheet).toBeVisible();
 
-    for (const label of ['Bills', 'Income', 'Budgets', 'Invest', 'Reports', 'Settings', 'Help']) {
+    for (const label of ['Loans', 'Bills', 'Income', 'Budgets', 'Invest', 'Reports', 'Settings', 'Help']) {
       await expect(sheet.getByRole('link', { name: label, exact: true })).toBeVisible();
     }
 

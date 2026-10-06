@@ -10,6 +10,7 @@ import {
   BillIcon,
   BudgetIcon,
   CardIcon,
+  CashIcon,
   DashboardIcon,
   ExpenseIcon,
   IncomeIcon,
@@ -31,9 +32,10 @@ export interface NavItem {
 
 export const NAV_ITEMS: NavItem[] = [
   { to: '/', label: 'Dashboard', icon: DashboardIcon, primary: true },
+  { to: '/accounts', label: 'Cash', icon: CashIcon, primary: true },
   { to: '/expenses', label: 'Expenses', icon: ExpenseIcon, primary: true },
   { to: '/cards', label: 'Cards', icon: CardIcon, primary: true },
-  { to: '/loans', label: 'Loans', icon: LoanIcon, primary: true },
+  { to: '/loans', label: 'Loans', icon: LoanIcon },
   { to: '/bills', label: 'Bills', icon: BillIcon },
   { to: '/income', label: 'Income', icon: IncomeIcon },
   { to: '/budgets', label: 'Budgets', icon: BudgetIcon },

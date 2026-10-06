@@ -26,7 +26,7 @@ import {
 } from '@/components/ui';
 import { MoneyInput } from './MoneyInput';
 import { create } from '@/lib/db/repository';
-import { useCreditCards } from '@/hooks/useData';
+import { useCashAccounts, useCreditCards } from '@/hooks/useData';
 import { useUI } from '@/stores/ui';
 import { todayISO } from '@/lib/finance/dates';
 import { humanise } from '@/lib/utils';
@@ -49,6 +49,7 @@ export interface ExpenseDraft {
   date: string;
   paymentMethod: PaymentMethod;
   creditCardId: string | null;
+  cashAccountId: string | null;
   notes: string;
 }
 
@@ -60,6 +61,7 @@ export function emptyDraft(): ExpenseDraft {
     date: todayISO(),
     paymentMethod: 'UPI',
     creditCardId: null,
+    cashAccountId: null,
     notes: '',
   };
 }
@@ -94,6 +96,7 @@ export function ExpenseDialog({
   onSaved?: () => void;
 }) {
   const cards = useCreditCards();
+  const accounts = useCashAccounts();
   const [draft, setDraft] = React.useState<ExpenseDraft>(initial ?? emptyDraft());
   const [error, setError] = React.useState<string | null>(null);
   const [saving, setSaving] = React.useState(false);
@@ -133,6 +136,7 @@ export function ExpenseDialog({
         date: draft.date,
         paymentMethod: draft.paymentMethod,
         creditCardId: draft.paymentMethod === 'CREDIT_CARD' ? draft.creditCardId : null,
+        cashAccountId: draft.paymentMethod === 'CREDIT_CARD' ? null : draft.cashAccountId,
         isRecurring: false,
         notes: draft.notes.trim() || undefined,
       };
@@ -149,7 +153,13 @@ export function ExpenseDialog({
       onSaved?.();
       if (keepOpen) {
         // Keep the date and method — most people add several in a row.
-        setDraft({ ...emptyDraft(), date: draft.date, paymentMethod: draft.paymentMethod, creditCardId: draft.creditCardId });
+        setDraft({
+          ...emptyDraft(),
+          date: draft.date,
+          paymentMethod: draft.paymentMethod,
+          creditCardId: draft.creditCardId,
+          cashAccountId: draft.cashAccountId,
+        });
         amountRef.current?.focus();
       } else {
         onOpenChange(false);
@@ -257,6 +267,29 @@ export function ExpenseDialog({
                     </SelectContent>
                   </Select>
                 )}
+              </Field>
+            )}
+
+            {draft.paymentMethod !== 'CREDIT_CARD' && accounts.length > 0 && (
+              <Field
+                label="From which account"
+                hint="Optional. Tagging it lets the Accounts page tell you what should be left."
+              >
+                <Select
+                  value={draft.cashAccountId ?? '__none__'}
+                  onValueChange={(v) => set('cashAccountId', v === '__none__' ? null : v)}
+                >
+                  <SelectTrigger><SelectValue placeholder="Not specified" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">Not specified</SelectItem>
+                    {accounts.map((a) => (
+                      <SelectItem key={a.id} value={a.id}>
+                        {a.name}
+                        {a.kind === 'BANK' && a.last4 ? ` ····${a.last4}` : ''}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </Field>
             )}
           </div>

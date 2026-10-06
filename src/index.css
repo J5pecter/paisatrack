@@ -218,3 +218,165 @@
 .print-only {
   display: none;
 }
+
+/* ---------------------------------------------------------------------------
+   Motion primitives
+   ---------------------------------------------------------------------------
+   Paired with src/components/motion.tsx. Everything animates transform and
+   opacity only — the two properties the compositor handles without touching
+   layout or paint. Animating width/top/box-shadow instead is why interfaces
+   that feel smooth on a laptop stop being smooth on a mid-range Android.
+
+   The depth is real 3D: a perspective ancestor plus rotateX/rotateY/translateZ.
+   No WebGL, no 3D engine, no bytes.
+   --------------------------------------------------------------------------- */
+
+@layer components {
+  /* The perspective lives on the grid, not the card. Per-card perspective
+     makes every tile its own vanishing point, so a row of them tilts like
+     separate photographs rather than like one surface. */
+  .tilt-scene {
+    perspective: 1200px;
+    perspective-origin: 50% 50%;
+  }
+
+  .tilt-card {
+    --tilt-x: 0deg;
+    --tilt-y: 0deg;
+    --tilt-z: 0px;
+    transform: rotateX(var(--tilt-x)) rotateY(var(--tilt-y)) translateZ(var(--tilt-z));
+    transform-style: preserve-3d;
+    transition: transform 420ms cubic-bezier(0.22, 1, 0.36, 1);
+    /* Promote once, up front. Without this the first tilt of each card pays
+       for layer creation and visibly stutters. */
+    will-change: transform;
+  }
+
+  /* While the pointer is moving, shorten the transition so the card tracks the
+     cursor instead of lagging behind it; the long ease is for the return. */
+  .tilt-card:hover {
+    transition-duration: 90ms;
+  }
+
+  /* A specular highlight that follows the cursor. Sells the surface as
+     something with an angle to it, which is most of why a tilt reads as 3D
+     rather than as a skew. */
+  .tilt-card--glare {
+    position: relative;
+    --glare-x: 50%;
+    --glare-y: 50%;
+    --glare-o: 0;
+  }
+
+  .tilt-card--glare::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    pointer-events: none;
+    opacity: var(--glare-o);
+    transition: opacity 260ms ease;
+    background: radial-gradient(
+      380px circle at var(--glare-x) var(--glare-y),
+      color-mix(in oklab, var(--color-primary) 16%, transparent),
+      transparent 60%
+    );
+  }
+
+  .magnetic {
+    --mag-x: 0px;
+    --mag-y: 0px;
+    display: inline-flex;
+    transform: translate3d(var(--mag-x), var(--mag-y), 0);
+    transition: transform 380ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .magnetic:hover {
+    transition-duration: 110ms;
+  }
+
+  .reveal {
+    --reveal-delay: 0ms;
+    opacity: 0;
+    transform: translate3d(0, 14px, 0);
+    transition:
+      opacity 520ms cubic-bezier(0.22, 1, 0.36, 1) var(--reveal-delay),
+      transform 520ms cubic-bezier(0.22, 1, 0.36, 1) var(--reveal-delay);
+  }
+
+  .reveal[data-revealed] {
+    opacity: 1;
+    transform: none;
+  }
+
+  .pressable {
+    --press-scale: 0.97;
+    transition: transform 240ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .pressable:active {
+    transform: scale(var(--press-scale));
+    transition-duration: 60ms;
+  }
+
+  /* A slow sheen for skeletons. Translating a gradient beats animating
+     background-position, which repaints the element every frame. */
+  .shimmer {
+    position: relative;
+    overflow: hidden;
+  }
+
+  .shimmer::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    transform: translateX(-100%);
+    background: linear-gradient(
+      90deg,
+      transparent,
+      color-mix(in oklab, var(--color-foreground) 8%, transparent),
+      transparent
+    );
+    animation: shimmer 1.6s ease-in-out infinite;
+  }
+}
+
+@keyframes shimmer {
+  to { transform: translateX(100%); }
+}
+
+/* ---------------------------------------------------------------------------
+   Reduced motion
+   ---------------------------------------------------------------------------
+   Not a courtesy. Vestibular disorders are real, and parallax and spring
+   overshoot are among the worst offenders. Everything collapses to its final
+   state — content still arrives, it simply does not move to get there.
+   The JS primitives check the same query, so nothing animates off-thread
+   either. --------------------------------------------------------------------- */
+
+@media (prefers-reduced-motion: reduce) {
+  .tilt-card,
+  .magnetic,
+  .pressable {
+    transform: none !important;
+    transition: none !important;
+  }
+
+  .tilt-card--glare::after {
+    display: none;
+  }
+
+  .reveal {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+
+  .shimmer::after {
+    animation: none;
+  }
+
+  .animate-fade-in {
+    animation: none;
+  }
+}

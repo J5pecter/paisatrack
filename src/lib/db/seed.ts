@@ -8,7 +8,7 @@
  * Amounts are deliberately plausible rather than round, and the random walk is
  * seeded so the sample looks the same every time you load it.
  */
-import { addMonths, format, startOfMonth } from 'date-fns';
+import { addDays, addMonths, format, startOfMonth } from 'date-fns';
 import { db } from './schema';
 import { getDeviceId, nowISO } from './repository';
 import { toPaise } from '@/lib/finance/money';
@@ -19,6 +19,7 @@ import type {
   Bill,
   BillEntry,
   Budget,
+  CashAccount,
   CreditCard,
   CreditCardStatement,
   Expense,
@@ -321,6 +322,17 @@ export async function seedSampleData(): Promise<{ counts: Record<string, number>
       const method = pick(methods);
       const cardId = method === 'CREDIT_CARD' ? pick(['card_hdfc', 'card_sbi']) : null;
 
+      // Attribute non-card spending to a real account, so the Accounts page has
+      // a genuine "spent since you last counted" figure rather than an empty
+      // projection. Cash comes out of the wallet; everything digital comes out
+      // of the salary account, which is how it actually works.
+      const accountId =
+        method === 'CREDIT_CARD'
+          ? null
+          : method === 'CASH'
+            ? 'acc_wallet'
+            : 'acc_hdfc';
+
       expenses.push({
         id: `exp_${expenseSeq++}`,
         userId: USER_ID,
@@ -330,11 +342,54 @@ export async function seedSampleData(): Promise<{ counts: Record<string, number>
         date: format(new Date(month.getFullYear(), month.getMonth(), day), 'yyyy-MM-dd'),
         paymentMethod: method,
         creditCardId: cardId,
+        cashAccountId: accountId,
         isRecurring: false,
         ...envelope(),
       });
     }
   }
+
+  // --- Cash and bank --------------------------------------------------------
+  // Dated a fortnight back on purpose: the Accounts page should demonstrate a
+  // stale balance and the "spent since" projection on first run, rather than
+  // showing a freshly confirmed figure with nothing to say.
+  const cashAccounts: CashAccount[] = [
+    {
+      id: 'acc_wallet',
+      userId: USER_ID,
+      name: 'Wallet',
+      kind: 'CASH',
+      balance: toPaise(4_200),
+      balanceAsOf: toISODate(addDays(today, -16)),
+      includeInNetWorth: true,
+      isDefault: true,
+      ...envelope(),
+    },
+    {
+      id: 'acc_hdfc',
+      userId: USER_ID,
+      name: 'HDFC Savings',
+      kind: 'BANK',
+      bankName: 'HDFC Bank',
+      last4: '4821',
+      balance: toPaise(1_86_400),
+      balanceAsOf: toISODate(addDays(today, -3)),
+      includeInNetWorth: true,
+      ...envelope(),
+    },
+    {
+      id: 'acc_sbi',
+      userId: USER_ID,
+      name: 'SBI Salary',
+      kind: 'BANK',
+      bankName: 'State Bank of India',
+      last4: '9077',
+      balance: toPaise(42_750),
+      balanceAsOf: toISODate(addDays(today, -1)),
+      includeInNetWorth: true,
+      ...envelope(),
+    },
+  ];
 
   // --- Investments ----------------------------------------------------------
   const investments: Investment[] = [
@@ -453,7 +508,7 @@ export async function seedSampleData(): Promise<{ counts: Record<string, number>
     [
       db.users, db.salaryProfile, db.income, db.creditCards, db.statements,
       db.loans, db.bills, db.billEntries, db.expenses, db.investments,
-      db.budgets, db.goals,
+      db.budgets, db.goals, db.cashAccounts,
     ],
     () =>
       Promise.all([
@@ -469,6 +524,7 @@ export async function seedSampleData(): Promise<{ counts: Record<string, number>
         db.investments.bulkPut(investments),
         db.budgets.bulkPut(budgets),
         db.goals.bulkPut(goals),
+        db.cashAccounts.bulkPut(cashAccounts),
       ]),
   );
 

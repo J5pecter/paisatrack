@@ -273,6 +273,34 @@ export type ExpenseCategory =
 export type PaymentMethod =
   | 'CASH' | 'UPI' | 'DEBIT_CARD' | 'CREDIT_CARD' | 'NET_BANKING' | 'WALLET' | 'AUTO_DEBIT';
 
+export type CashAccountKind = 'CASH' | 'BANK';
+
+/**
+ * Money you can spend today: notes in a wallet, or a balance in a bank.
+ *
+ * `balance` is what you last *confirmed* was actually there, and
+ * `balanceAsOf` is when. It is not derived, because PaisaTrack has no feed
+ * into your bank — the user is the sensor. Spending tagged to the account is
+ * subtracted from it to project a current figure; see `lib/finance/cash.ts`.
+ */
+export interface CashAccount extends BaseRecord {
+  userId: string;
+  name: string;
+  kind: CashAccountKind;
+  /** Last confirmed balance, in integer paise. */
+  balance: Paise;
+  /** The date that balance was confirmed. Treated as end-of-day. */
+  balanceAsOf: ISODate;
+  /** For a bank account: who it is with, and the last four digits. */
+  bankName?: string;
+  last4?: string;
+  /** Pre-selected when logging a cash or bank expense. */
+  isDefault?: boolean;
+  /** A joint or business account can be tracked without inflating net worth. */
+  includeInNetWorth: boolean;
+  notes?: string;
+}
+
 export interface Expense extends BaseRecord {
   userId: string;
   amount: Paise;
@@ -283,6 +311,11 @@ export interface Expense extends BaseRecord {
   paymentMethod: PaymentMethod;
   /** Required when paymentMethod is CREDIT_CARD - feeds card outstanding. */
   creditCardId?: string | null;
+  /**
+   * Which cash or bank account this came out of. Optional: untagged spending
+   * simply cannot be attributed, and cash.ts ignores it rather than guessing.
+   */
+  cashAccountId?: string | null;
   isRecurring: boolean;
   tags?: string[];
   notes?: string;
@@ -348,13 +381,13 @@ export type SyncTable =
   | 'users' | 'income' | 'salaryProfile' | 'creditCards' | 'statements'
   | 'cardTxns' | 'cardPayments'
   | 'loans' | 'loanPayments' | 'bills' | 'billEntries' | 'expenses'
-  | 'investments' | 'budgets' | 'goals' | 'reminders';
+  | 'investments' | 'budgets' | 'goals' | 'reminders' | 'cashAccounts';
 
 export const SYNC_TABLES: SyncTable[] = [
   'users', 'income', 'salaryProfile', 'creditCards', 'statements',
   'cardTxns', 'cardPayments',
   'loans', 'loanPayments', 'bills', 'billEntries', 'expenses',
-  'investments', 'budgets', 'goals', 'reminders',
+  'investments', 'budgets', 'goals', 'reminders', 'cashAccounts',
 ];
 
 export interface SyncQueueItem {

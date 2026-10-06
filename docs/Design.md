@@ -140,6 +140,32 @@ exact amount in the `title` attribute.
   **More** button opening a bottom sheet with the remaining seven, sticky
   header, safe-area padding for the home indicator.
 
+### Motion
+
+Depth is CSS 3D — a `perspective` ancestor (`.tilt-scene`) plus
+`rotateX/rotateY/translateZ` on the card. No 3D engine: Three.js is ~150 kB
+gzipped against a 300 kB budget, to draw rectangles the compositor already
+handles for free. Measured cost of the whole motion layer: **0 kB** of the
+initial bundle and no change to any Core Web Vital.
+
+| Primitive | Where it earns its place |
+| --- | --- |
+| `TiltCard` | Stat tiles and account cards. Max 6° — past ~8° text shears and a figure gets harder to read, which is a bad trade on a money screen. |
+| `Magnetic` | Primary actions. 6px of travel; a control that outruns the pointer is a joke once. |
+| `Reveal` | Section entrances, stagger capped at 320ms so a long list does not trickle. |
+| `SpringBar` | Utilisation and budget meters, where overshoot draws the eye to the number that matters. |
+| `Pressable` | Responds to *press*, not click — the gap between the two is where a fast interface still feels unresponsive. |
+
+Only `transform` and `opacity` are animated: the two properties the
+compositor handles without layout or paint. Springs carry velocity through
+interruptions, so a retargeted animation continues rather than restarting.
+
+**Reduced motion collapses all of it** — CSS and JS both check the query. Not a
+courtesy: parallax and spring overshoot are among the worst triggers for
+vestibular disorders. `Reveal` additionally fails *open*, with a 1200ms
+backstop, because its hidden state is `opacity: 0` — if the observer never
+reported, the content would not be unanimated, it would be gone.
+
 ### Spacing
 
 Tailwind's 4px scale. Card padding `p-4` / `sm:p-5`; grid gaps `gap-4` / `gap-5`;

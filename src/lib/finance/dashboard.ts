@@ -5,10 +5,12 @@
  * numbers testable and means the whole dashboard recomputes in microseconds
  * from data already in memory.
  */
+import { totalLiquid } from './cash';
 import type {
   Bill,
   BillEntry,
   Budget,
+  CashAccount,
   CreditCard,
   CreditCardStatement,
   Expense,
@@ -532,6 +534,8 @@ export function safeToSpend(
 
 export interface NetWorth {
   investments: Paise;
+  /** Cash in hand plus bank balances. Liquid, spendable today. */
+  cash: Paise;
   investedPrincipal: Paise;
   gains: Paise;
   gainPercent: number;
@@ -542,6 +546,8 @@ export interface NetWorth {
 
 export function netWorth(params: {
   investments: Investment[];
+  /** Optional so existing callers keep working; absent means no cash tracked. */
+  cashAccounts?: CashAccount[];
   cards: CreditCard[];
   statements: CreditCardStatement[];
   loans: Loan[];
@@ -550,10 +556,12 @@ export function netWorth(params: {
 }): NetWorth {
   const investmentValue = sumMoney(params.investments.map((i) => i.currentValue));
   const investedPrincipal = sumMoney(params.investments.map((i) => i.investedAmount));
+  const liquid = totalLiquid(params.cashAccounts ?? []);
   const debt = debtOverview(params);
 
   return {
     investments: investmentValue,
+    cash: liquid,
     investedPrincipal,
     gains: investmentValue - investedPrincipal,
     gainPercent: investedPrincipal > 0
@@ -561,7 +569,10 @@ export function netWorth(params: {
       : 0,
     cardDebt: debt.cardOutstanding,
     loanDebt: debt.loanOutstanding,
-    netWorth: investmentValue - debt.totalDebt,
+    // Net worth was investments minus debt, which silently valued every rupee
+    // of cash at zero. Someone with no investments and a full bank account read
+    // as worth exactly their debt, negated.
+    netWorth: investmentValue + liquid - debt.totalDebt,
   };
 }
 

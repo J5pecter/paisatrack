@@ -117,6 +117,7 @@ PaisaTrack/
     │   │   ├── bills.ts         Recurring bills, electricity
     │   │   ├── cardState.ts     Resolver: ledger vs statements
     │   │   ├── loanState.ts     Resolver: payments vs schedule
+    │   │   ├── cash.ts          Cash/bank projection and reconciliation
     │   │   └── dashboard.ts     Derived aggregates
     │   ├── db/
     │   │   ├── schema.ts        Dexie schema + versions
@@ -127,6 +128,7 @@ PaisaTrack/
     │   │   └── engine.ts        Background push/pull
     │   ├── github/client.ts     Octokit wrapper, lazy-loaded
     │   ├── validation.ts        Zod schemas for anything imported
+    │   ├── motion.ts            Spring integrator, reduced-motion guard
     │   └── utils.ts             cn(), humanise()
     ├── components/
     │   ├── ui/index.tsx         shadcn-pattern kit on Radix
@@ -134,6 +136,7 @@ PaisaTrack/
     │   ├── charts.tsx           Recharts (lazy chunk)
     │   ├── chartPalette.tsx     Palette only — no Recharts import
     │   ├── LazyCharts.tsx       Suspense wrappers
+    │   ├── motion.tsx            TiltCard, Magnetic, Reveal, SpringBar
     │   └── layout/              AppShell, nav model, SyncIndicator
     ├── pages/                   One file per screen
     ├── routes/router.tsx        Typed route tree

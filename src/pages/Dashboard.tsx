@@ -32,6 +32,8 @@ import {
 } from '@/components/ui';
 import { PageHeader } from '@/components/layout/AppShell';
 import { Money } from '@/components/Money';
+import { Reveal, TiltCard } from '@/components/motion';
+import { staggerDelay } from '@/lib/motion';
 import { CategoryDonut, TrendChart } from '@/components/LazyCharts';
 import { useDashboardData, useHasData } from '@/hooks/useData';
 import {
@@ -151,8 +153,9 @@ export function Dashboard() {
       )}
 
       {/* This month */}
-      <div className="mb-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-4 [&>*]:min-w-0">
+      <div className="tilt-scene mb-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-4 [&>*]:min-w-0">
         <StatCard
+          index={0}
           label="Income this month"
           testId="stat-income"
           value={snapshot.incomeExpected}
@@ -161,6 +164,7 @@ export function Dashboard() {
           footnote={`${((snapshot.incomeReceived / Math.max(1, snapshot.incomeExpected)) * 100).toFixed(0)}% credited so far`}
         />
         <StatCard
+          index={1}
           label="Spent"
           testId="stat-spent"
           value={snapshot.expensesTotal + snapshot.billsTotal}
@@ -169,6 +173,7 @@ export function Dashboard() {
           footnote={`${snapshot.expensesTotal > 0 ? categories.length : 0} categories`}
         />
         <StatCard
+          index={2}
           label="EMIs + minimums"
           testId="stat-obligation"
           value={debt.monthlyObligation}
@@ -177,6 +182,7 @@ export function Dashboard() {
           footnote={debt.totalDebt > 0 ? 'Fixed monthly obligation' : 'Debt free'}
         />
         <StatCard
+          index={3}
           label="Savings rate"
           testId="stat-savings"
           value={snapshot.savings}
@@ -379,7 +385,12 @@ export function Dashboard() {
           <CardTitle className="text-base">Net worth</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+            <div>
+              <p className="text-xs text-[var(--color-muted-foreground)]">Cash and bank</p>
+              <Money value={worth.cash} className="text-lg font-semibold" animate data-testid="nw-cash" />
+              <p className="mt-0.5 text-xs text-[var(--color-muted-foreground)]">Spendable today</p>
+            </div>
             <div>
               <p className="text-xs text-[var(--color-muted-foreground)]">Investments</p>
               <Money value={worth.investments} className="text-lg font-semibold" animate data-testid="nw-investments" />
@@ -448,6 +459,7 @@ function StatCard({
   tone,
   footnote,
   testId,
+  index = 0,
 }: {
   label: string;
   value: number;
@@ -455,6 +467,8 @@ function StatCard({
   tone: 'good' | 'spend' | 'neutral';
   footnote?: string;
   testId?: string;
+  /** Position in the row, used for the reveal stagger. */
+  index?: number;
 }) {
   const toneClass =
     tone === 'good'
@@ -464,7 +478,9 @@ function StatCard({
         : 'text-[var(--color-info)]';
 
   return (
-    <Card>
+    <Reveal delay={staggerDelay(index)}>
+      <TiltCard>
+        <Card className="h-full">
       <CardContent className="pt-5">
         <div className="flex items-center justify-between">
           <p className="text-xs font-medium text-[var(--color-muted-foreground)]">{label}</p>
@@ -480,7 +496,9 @@ function StatCard({
           <p className="mt-1 text-xs text-[var(--color-muted-foreground)]">{footnote}</p>
         )}
       </CardContent>
-    </Card>
+        </Card>
+      </TiltCard>
+    </Reveal>
   );
 }
 

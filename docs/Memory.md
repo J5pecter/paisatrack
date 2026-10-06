@@ -311,8 +311,8 @@ interest was charged on the gross spend rather than the net balance.
 
 | | |
 | --- | --- |
-| Unit tests | 309 across 13 files, ~50s |
-| E2E tests | 42 declared / 39 run (desktop + Pixel 7), ~45s |
+| Unit tests | 342 across 15 files, ~50s |
+| E2E tests | 42 declared / 39 run (desktop + Pixel 7), ~44s |
 | Finance engine coverage | 94% statements, 96% lines |
 | Production build | ~1.5s |
 | Initial JS (transferred) | **284 kB** across 16 files |

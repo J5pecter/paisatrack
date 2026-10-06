@@ -23,6 +23,8 @@ export {
   Bank as LoanIcon,
   ArrowsLeftRight as BillIcon,
   Wallet as IncomeIcon,
+  Money as CashIcon,
+  Bank as BankIcon,
   PiggyBank as BudgetIcon,
   ChartLineUp as InvestmentIcon,
   ChartBar as ReportIcon,

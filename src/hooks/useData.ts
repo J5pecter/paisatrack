@@ -14,6 +14,7 @@ import type {
   Budget,
   CardPaymentRecord,
   CardTxnRecord,
+  CashAccount,
   CreditCard,
   CreditCardStatement,
   Expense,
@@ -105,6 +106,18 @@ export function useSalaryProfile(): SalaryProfile | undefined {
   );
 }
 
+export function useCashAccounts(): CashAccount[] {
+  const rows = useLiveQuery(() => db.cashAccounts.toArray(), []);
+  // Cash before bank, then by name: the wallet is what you check first.
+  return useMemo(
+    () =>
+      live(rows).sort((a, b) =>
+        a.kind === b.kind ? a.name.localeCompare(b.name) : a.kind === 'CASH' ? -1 : 1,
+      ),
+    [rows],
+  );
+}
+
 export function useInvestments(): Investment[] {
   const rows = useLiveQuery(() => db.investments.toArray(), []);
   return useMemo(() => live(rows), [rows]);
@@ -156,11 +169,13 @@ export interface DashboardData {
   investments: Investment[];
   budgets: Budget[];
   goals: Goal[];
+  cashAccounts: CashAccount[];
 }
 
 const EMPTY_DASHBOARD: DashboardData = {
   expenses: [], loanPayments: [], cards: [], statements: [], cardTxns: [], cardPayments: [],
   loans: [], bills: [], billEntries: [], income: [], investments: [], budgets: [], goals: [],
+  cashAccounts: [],
 };
 
 /**
@@ -177,6 +192,7 @@ export function useDashboardData(): DashboardData & { isLoading: boolean } {
     const [
       expenses, cards, statements, cardTxns, cardPayments,
       loans, loanPayments, bills, billEntries, income, investments, budgets, goals,
+      cashAccounts,
     ] = await Promise.all([
       db.expenses.toArray(),
       db.creditCards.toArray(),
@@ -191,6 +207,7 @@ export function useDashboardData(): DashboardData & { isLoading: boolean } {
       db.investments.toArray(),
       db.budgets.toArray(),
       db.goals.toArray(),
+      db.cashAccounts.toArray(),
     ]);
 
     return {
@@ -207,6 +224,7 @@ export function useDashboardData(): DashboardData & { isLoading: boolean } {
       investments: live(investments),
       budgets: live(budgets),
       goals: live(goals),
+      cashAccounts: live(cashAccounts),
     };
   }, []);
 

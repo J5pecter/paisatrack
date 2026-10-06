@@ -12,6 +12,7 @@ import type {
   Budget,
   CardPaymentRecord,
   CardTxnRecord,
+  CashAccount,
   CreditCard,
   CreditCardStatement,
   Expense,
@@ -45,6 +46,7 @@ export class PaisaTrackDB extends Dexie {
   budgets!: EntityTable<Budget, 'id'>;
   goals!: EntityTable<Goal, 'id'>;
   reminders!: EntityTable<Reminder, 'id'>;
+  cashAccounts!: EntityTable<CashAccount, 'id'>;
 
   _syncQueue!: EntityTable<SyncQueueItem, 'id'>;
   _syncMeta!: EntityTable<SyncMeta, 'table'>;
@@ -84,6 +86,15 @@ export class PaisaTrackDB extends Dexie {
     this.version(2).stores({
       cardTxns: 'id, cardId, date, type, updatedAt, [cardId+date]',
       cardPayments: 'id, cardId, date, updatedAt, [cardId+date]',
+    });
+
+    // v3 adds cash and bank accounts, and lets an expense name the account it
+    // came out of. Dexie only needs the index line for the NEW table; the
+    // added field on expenses is not indexed, so existing rows upgrade in
+    // place with cashAccountId simply undefined — which cash.ts reads as
+    // "unattributed" rather than as an error.
+    this.version(3).stores({
+      cashAccounts: 'id, kind, isDefault, includeInNetWorth, updatedAt',
     });
   }
 }
