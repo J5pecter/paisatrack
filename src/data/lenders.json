@@ -1,0 +1,72 @@
+{
+  "lastUpdated": "2026-09-30",
+  "note": "Indicative rates for Indian lenders. Refreshed monthly by .github/workflows/refresh-rates.yml from BSE India's public MCLR disclosure. Always confirm the actual rate with the lender before committing.",
+  "home": [
+    { "name": "LIC Housing Finance", "rateMin": 7.10, "rateMax": 8.75 },
+    { "name": "Union Bank of India", "rateMin": 7.15, "rateMax": 9.50 },
+    { "name": "Bank of Baroda", "rateMin": 7.20, "rateMax": 9.00 },
+    { "name": "Canara Bank", "rateMin": 7.20, "rateMax": 10.00 },
+    { "name": "State Bank of India", "rateMin": 7.25, "rateMax": 8.70 },
+    { "name": "Punjab National Bank", "rateMin": 7.25, "rateMax": 9.20 },
+    { "name": "Bajaj Housing Finance", "rateMin": 7.30, "rateMax": 9.00 },
+    { "name": "ICICI Bank", "rateMin": 7.45, "rateMax": 9.10 },
+    { "name": "Kotak Mahindra Bank", "rateMin": 7.70, "rateMax": 9.30 },
+    { "name": "HDFC Bank", "rateMin": 7.90, "rateMax": 9.40 },
+    { "name": "Axis Bank", "rateMin": 8.00, "rateMax": 9.10 },
+    { "name": "IDFC FIRST Bank", "rateMin": 8.35, "rateMax": 9.50 },
+    { "name": "Tata Capital Housing", "rateMin": 8.40, "rateMax": 10.50 }
+  ],
+  "personal": [
+    { "name": "Union Bank of India", "rateMin": 8.75, "rateMax": 12.55 },
+    { "name": "Bank of Maharashtra", "rateMin": 8.75, "rateMax": 13.55 },
+    { "name": "Axis Bank", "rateMin": 9.50, "rateMax": 22.00 },
+    { "name": "Canara Bank", "rateMin": 9.70, "rateMax": 15.15 },
+    { "name": "HDFC Bank", "rateMin": 9.99, "rateMax": 24.00 },
+    { "name": "ICICI Bank", "rateMin": 9.99, "rateMax": 21.00 },
+    { "name": "State Bank of India", "rateMin": 10.00, "rateMax": 15.00 },
+    { "name": "IDFC FIRST Bank", "rateMin": 10.49, "rateMax": 17.99 },
+    { "name": "Tata Capital", "rateMin": 10.99, "rateMax": 29.00 },
+    { "name": "Kotak Mahindra Bank", "rateMin": 10.99, "rateMax": 24.00 },
+    { "name": "Bajaj Finserv", "rateMin": 11.00, "rateMax": 31.00 }
+  ],
+  "car": [
+    { "name": "State Bank of India", "rateMin": 8.65, "rateMax": 9.95 },
+    { "name": "Union Bank of India", "rateMin": 8.70, "rateMax": 10.20 },
+    { "name": "HDFC Bank", "rateMin": 8.75, "rateMax": 9.90 },
+    { "name": "Bank of Baroda", "rateMin": 8.80, "rateMax": 10.50 },
+    { "name": "ICICI Bank", "rateMin": 8.85, "rateMax": 9.90 },
+    { "name": "Canara Bank", "rateMin": 8.85, "rateMax": 10.80 },
+    { "name": "Axis Bank", "rateMin": 9.00, "rateMax": 11.50 },
+    { "name": "Kotak Mahindra Bank", "rateMin": 9.10, "rateMax": 12.00 }
+  ],
+  "education": [
+    { "name": "State Bank of India", "rateMin": 8.05, "rateMax": 10.25 },
+    { "name": "Bank of Baroda", "rateMin": 8.30, "rateMax": 10.90 },
+    { "name": "Union Bank of India", "rateMin": 8.40, "rateMax": 11.05 },
+    { "name": "Punjab National Bank", "rateMin": 8.50, "rateMax": 11.25 },
+    { "name": "Canara Bank", "rateMin": 8.60, "rateMax": 11.35 },
+    { "name": "Axis Bank", "rateMin": 9.30, "rateMax": 13.70 },
+    { "name": "HDFC Credila", "rateMin": 9.55, "rateMax": 13.25 },
+    { "name": "ICICI Bank", "rateMin": 9.85, "rateMax": 13.50 }
+  ],
+  "gold": [
+    { "name": "Muthoot Finance", "rateMin": 8.50, "rateMax": 11.50 },
+    { "name": "State Bank of India", "rateMin": 8.55, "rateMax": 10.05 },
+    { "name": "Manappuram Finance", "rateMin": 8.75, "rateMax": 12.00 },
+    { "name": "Bank of Baroda", "rateMin": 8.85, "rateMax": 10.50 },
+    { "name": "Canara Bank", "rateMin": 8.95, "rateMax": 10.75 },
+    { "name": "HDFC Bank", "rateMin": 9.10, "rateMax": 16.00 },
+    { "name": "ICICI Bank", "rateMin": 9.25, "rateMax": 18.00 },
+    { "name": "IIFL Finance", "rateMin": 9.50, "rateMax": 24.00 }
+  ],
+  "lap": [
+    { "name": "State Bank of India", "rateMin": 9.00, "rateMax": 11.50 },
+    { "name": "HDFC Bank", "rateMin": 9.05, "rateMax": 11.00 },
+    { "name": "Bank of Baroda", "rateMin": 9.15, "rateMax": 11.75 },
+    { "name": "ICICI Bank", "rateMin": 9.25, "rateMax": 11.50 },
+    { "name": "Axis Bank", "rateMin": 9.40, "rateMax": 12.00 },
+    { "name": "Punjab National Bank", "rateMin": 9.50, "rateMax": 12.25 },
+    { "name": "Tata Capital", "rateMin": 9.75, "rateMax": 14.00 },
+    { "name": "Bajaj Finserv", "rateMin": 10.10, "rateMax": 16.00 }
+  ]
+}

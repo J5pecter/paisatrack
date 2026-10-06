@@ -1,0 +1,18 @@
+# Normalise line endings.
+#
+# Git is configured with autocrlf on this machine, which would otherwise commit
+# CRLF for every text file and give the Linux CI runner a diff against its own
+# checkout. Storing LF and checking out LF everywhere keeps the repo identical
+# on every platform.
+* text=auto eol=lf
+
+# Binary assets must never be touched.
+*.png binary
+*.jpg binary
+*.ico binary
+*.woff  binary
+*.woff2 binary
+*.pdf binary
+
+# Generated; collapse it in diffs and exclude it from language stats.
+package-lock.json  -diff linguist-generated=true

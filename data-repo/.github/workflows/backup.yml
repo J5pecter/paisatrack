@@ -1,0 +1,60 @@
+name: Nightly snapshot
+
+# Takes a dated copy of data.json each night.
+#
+# Git history already preserves every sync commit, so this is belt-and-braces:
+# a dated snapshot is far easier to find and restore than hunting through the
+# log, and it survives a bad merge that clobbers data.json.
+#
+# This repo is PRIVATE, so these minutes come out of the free 2,000/month
+# allowance. The job takes well under a minute, so roughly 30 minutes a month.
+
+on:
+  schedule:
+    # 18:30 UTC = midnight IST, after the day's activity is in.
+    - cron: '30 18 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Snapshot data.json
+        run: |
+          if [ ! -f data.json ]; then
+            echo "No data.json yet — nothing to snapshot."
+            exit 0
+          fi
+
+          # Refuse to snapshot a file that is not valid JSON; that would only
+          # preserve the corruption.
+          if ! python3 -c "import json,sys; json.load(open('data.json'))"; then
+            echo "data.json is not valid JSON. Refusing to snapshot it."
+            exit 1
+          fi
+
+          mkdir -p snapshots
+          STAMP=$(date -u +%Y-%m-%d)
+          cp data.json "snapshots/data-$STAMP.json"
+          echo "Wrote snapshots/data-$STAMP.json"
+
+      - name: Prune snapshots older than 90 days
+        run: |
+          find snapshots -name 'data-*.json' -mtime +90 -delete 2>/dev/null || true
+
+      - name: Commit
+        run: |
+          if git diff --quiet && git diff --cached --quiet && [ -z "$(git status --porcelain)" ]; then
+            echo "Snapshot already current; nothing to commit."
+            exit 0
+          fi
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add snapshots
+          git commit -m "chore: nightly snapshot $(date -u +%Y-%m-%d)"
+          git push

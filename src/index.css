@@ -1,0 +1,220 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --color-border: hsl(215 28% 22%);
+  --color-input: hsl(215 28% 22%);
+  --color-ring: hsl(142 71% 45%);
+  --color-background: hsl(222 47% 8%);
+  --color-foreground: hsl(210 40% 96%);
+
+  --color-card: hsl(222 44% 11%);
+  --color-card-foreground: hsl(210 40% 96%);
+
+  --color-popover: hsl(222 44% 11%);
+  --color-popover-foreground: hsl(210 40% 96%);
+
+  --color-primary: hsl(142 71% 45%);
+  --color-primary-foreground: hsl(222 47% 8%);
+
+  --color-secondary: hsl(215 28% 18%);
+  --color-secondary-foreground: hsl(210 40% 96%);
+
+  --color-muted: hsl(215 28% 16%);
+  --color-muted-foreground: hsl(217 18% 62%);
+
+  --color-accent: hsl(215 28% 20%);
+  --color-accent-foreground: hsl(210 40% 96%);
+
+  --color-destructive: hsl(0 72% 51%);
+  --color-destructive-foreground: hsl(210 40% 98%);
+
+  --color-success: hsl(142 71% 45%);
+  --color-warning: hsl(38 92% 50%);
+  --color-danger: hsl(0 72% 51%);
+  --color-info: hsl(199 89% 48%);
+
+  --radius-lg: 0.75rem;
+  --radius-md: 0.5rem;
+  --radius-sm: 0.375rem;
+
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: ui-monospace, "Cascadia Code", "Source Code Pro", Menlo, monospace;
+}
+
+/* Light theme overrides — applied when .dark is absent */
+:root:not(.dark) {
+  --color-border: hsl(214 20% 88%);
+  --color-input: hsl(214 20% 88%);
+  --color-background: hsl(0 0% 100%);
+  --color-foreground: hsl(222 47% 11%);
+  --color-card: hsl(0 0% 100%);
+  --color-card-foreground: hsl(222 47% 11%);
+  --color-popover: hsl(0 0% 100%);
+  --color-popover-foreground: hsl(222 47% 11%);
+  --color-primary: hsl(142 69% 35%);
+  --color-primary-foreground: hsl(0 0% 100%);
+  --color-secondary: hsl(210 40% 96%);
+  --color-secondary-foreground: hsl(222 47% 11%);
+  --color-muted: hsl(210 40% 96%);
+  --color-muted-foreground: hsl(215 16% 42%);
+  --color-accent: hsl(210 40% 94%);
+  --color-accent-foreground: hsl(222 47% 11%);
+  --color-success: hsl(142 69% 35%);
+  --color-warning: hsl(32 95% 40%);
+  --color-danger: hsl(0 72% 45%);
+  --color-info: hsl(199 89% 40%);
+}
+
+@layer base {
+  * {
+    border-color: var(--color-border);
+  }
+  html {
+    -webkit-tap-highlight-color: transparent;
+  }
+  body {
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    overscroll-behavior-y: none;
+  }
+  /* Tabular figures everywhere money is shown */
+  .tnum {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum";
+  }
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb {
+    background: var(--color-muted);
+    border-radius: 9999px;
+    border: 2px solid transparent;
+    background-clip: content-box;
+  }
+  :focus-visible {
+    outline: 2px solid var(--color-ring);
+    outline-offset: 2px;
+  }
+}
+
+@layer utilities {
+  .safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
+  .safe-top { padding-top: env(safe-area-inset-top); }
+}
+
+@keyframes fade-in { from { opacity: 0; transform: translateY(4px);} to { opacity: 1; transform: none; } }
+.animate-fade-in { animation: fade-in 180ms ease-out; }
+
+/* ---------------------------------------------------------------------------
+ * Print
+ *
+ * Reports get printed and filed, so printing is a real output format rather
+ * than an afterthought. Chrome drops away, colours become ink-economical, and
+ * nothing is allowed to break across a page in the middle of a figure.
+ * ------------------------------------------------------------------------- */
+@media print {
+  /* Light on white regardless of the on-screen theme — nobody wants to print
+     a dark background, and most browsers drop it anyway, leaving pale text. */
+  :root,
+  :root.dark {
+    --color-background: #ffffff;
+    --color-card: #ffffff;
+    --color-foreground: #000000;
+    --color-card-foreground: #000000;
+    --color-muted: #f4f4f5;
+    --color-muted-foreground: #3f3f46;
+    --color-border: #d4d4d8;
+    --color-primary: #15803d;
+    --color-success: #15803d;
+    --color-warning: #a16207;
+    --color-danger: #b91c1c;
+    --color-info: #1d4ed8;
+  }
+
+  html,
+  body {
+    background: #fff !important;
+    color: #000 !important;
+  }
+
+  @page {
+    margin: 14mm;
+  }
+
+  /* Navigation, controls and overlays are not part of a printed report. */
+  aside,
+  header,
+  nav,
+  [data-sonner-toaster],
+  [role='dialog'],
+  [role='alertdialog'],
+  button,
+  input,
+  select,
+  textarea,
+  .print-hide {
+    display: none !important;
+  }
+
+  main {
+    padding: 0 !important;
+  }
+
+  main > div {
+    max-width: none !important;
+  }
+
+  /* Cards become plain ruled blocks; shadows and fills waste ink. */
+  [class*='rounded-lg'] {
+    border: 1px solid #d4d4d8 !important;
+    box-shadow: none !important;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+  }
+
+  thead {
+    display: table-header-group; /* repeat headers on every page */
+  }
+
+  tr,
+  img,
+  svg {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  th,
+  td {
+    border-bottom: 1px solid #e4e4e7 !important;
+    padding: 4px 6px !important;
+    font-size: 10pt !important;
+  }
+
+  h1 { font-size: 16pt !important; }
+  h2 { font-size: 13pt !important; }
+  h3 { font-size: 11pt !important; }
+
+  /* A printed page has no hover, so spell out where a link went. */
+  a[href^='http']::after {
+    content: ' (' attr(href) ')';
+    font-size: 8pt;
+    color: #52525b;
+  }
+
+  /* Anything that only makes sense on paper. */
+  .print-only {
+    display: block !important;
+  }
+}
+
+.print-only {
+  display: none;
+}

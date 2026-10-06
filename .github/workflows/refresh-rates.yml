@@ -1,0 +1,39 @@
+name: Refresh lender rates
+
+# Nudges src/data/lenders.json towards the published MCLR benchmark once a
+# month. Designed to fail quietly: if the source moves or the parse looks wrong,
+# it changes nothing and still exits green.
+
+on:
+  schedule:
+    # 03:30 UTC on the 1st = 09:00 IST, after month-start disclosures are filed.
+    - cron: '30 3 1 * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Fetch rates
+        run: node scripts/fetch-rates.mjs
+
+      - name: Commit if anything changed
+        run: |
+          if git diff --quiet src/data/lenders.json; then
+            echo "Rates unchanged; nothing to commit."
+            exit 0
+          fi
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/data/lenders.json
+          git commit -m "chore: refresh lender rates from MCLR disclosure"
+          git push

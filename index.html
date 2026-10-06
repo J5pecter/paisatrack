@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#0f172a" />
+
+    <!--
+      Content Security Policy.
+
+      GitHub Pages does not let us set response headers, so the policy is
+      delivered here. connect-src names exactly one external origin:
+      api.github.com. If a change needs another, that is a decision worth
+      arguing for in the commit message, not a quiet edit.
+
+      frame-ancestors is deliberately absent: browsers ignore it in a <meta>
+      element, and GitHub Pages does not let us set response headers, so
+      X-Frame-Options is unavailable too. The exposure is clickjacking, and it
+      is low here — there is no server session to ride, no privileged action an
+      invisible click could trigger, and no endpoint that trusts an origin.
+      Anyone self-hosting behind a proxy should add the header there.
+    -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' https://api.github.com; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests" />
+    <meta name="referrer" content="strict-origin-when-cross-origin" />
+    <meta name="description" content="PaisaTrack — personal finance tracker for India. Salary, credit cards, EMIs, bills, expenses." />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <title>PaisaTrack</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
