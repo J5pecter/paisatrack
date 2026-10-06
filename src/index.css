@@ -220,6 +220,32 @@
 }
 
 /* ---------------------------------------------------------------------------
+ * Motion timing
+ * ---------------------------------------------------------------------------
+ * One place to tune the feel of everything. The first pass was too eager —
+ * 90ms cursor tracking makes a surface feel snapped-to rather than followed,
+ * which reads as nervous instead of responsive.
+ *
+ * The easing matters as much as the duration. easeOutQuint (0.22, 1, 0.36, 1)
+ * dumps most of its travel in the first few frames, which is right for a
+ * dismissal and wrong for a surface you are leaning on. easeOutCubic is gentler
+ * off the mark and settles without the sudden stop.
+ * ------------------------------------------------------------------------- */
+:root {
+  --ease-smooth: cubic-bezier(0.33, 1, 0.68, 1);
+  --ease-soft: cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* Following the pointer. Long enough to glide, short enough to feel attached. */
+  --dur-track: 280ms;
+  /* Returning to rest once the pointer leaves. Unhurried on purpose. */
+  --dur-settle: 680ms;
+  /* Entrances. */
+  --dur-reveal: 720ms;
+  /* Discrete state changes: highlight, dim, press. */
+  --dur-state: 320ms;
+}
+
+/* ---------------------------------------------------------------------------
    Motion primitives
    ---------------------------------------------------------------------------
    Paired with src/components/motion.tsx. Everything animates transform and
@@ -245,7 +271,7 @@
   --tilt-z: 0px;
   transform: rotateX(var(--tilt-x)) rotateY(var(--tilt-y)) translateZ(var(--tilt-z));
   transform-style: preserve-3d;
-  transition: transform 420ms cubic-bezier(0.22, 1, 0.36, 1);
+  transition: transform var(--dur-settle) var(--ease-smooth);
   /* Promote once, up front. Without this the first tilt of each card pays
      for layer creation and visibly stutters. */
   will-change: transform;
@@ -254,7 +280,7 @@
 /* While the pointer is moving, shorten the transition so the card tracks the
    cursor instead of lagging behind it; the long ease is for the return. */
 .tilt-card:hover {
-  transition-duration: 90ms;
+  transition-duration: var(--dur-track);
 }
 
 /* A specular highlight that follows the cursor. Sells the surface as
@@ -274,7 +300,7 @@
   border-radius: inherit;
   pointer-events: none;
   opacity: var(--glare-o);
-  transition: opacity 260ms ease;
+  transition: opacity var(--dur-state) var(--ease-soft);
   background: radial-gradient(
     380px circle at var(--glare-x) var(--glare-y),
     color-mix(in oklab, var(--color-primary) 16%, transparent),
@@ -287,11 +313,11 @@
   --mag-y: 0px;
   display: inline-flex;
   transform: translate3d(var(--mag-x), var(--mag-y), 0);
-  transition: transform 380ms cubic-bezier(0.22, 1, 0.36, 1);
+  transition: transform var(--dur-settle) var(--ease-smooth);
 }
 
 .magnetic:hover {
-  transition-duration: 110ms;
+  transition-duration: var(--dur-track);
 }
 
 .reveal {
@@ -299,8 +325,8 @@
   opacity: 0;
   transform: translate3d(0, 14px, 0);
   transition:
-    opacity 520ms cubic-bezier(0.22, 1, 0.36, 1) var(--reveal-delay),
-    transform 520ms cubic-bezier(0.22, 1, 0.36, 1) var(--reveal-delay);
+    opacity var(--dur-reveal) var(--ease-smooth) var(--reveal-delay),
+    transform var(--dur-reveal) var(--ease-smooth) var(--reveal-delay);
 }
 
 .reveal[data-revealed] {
@@ -310,12 +336,12 @@
 
 .pressable {
   --press-scale: 0.97;
-  transition: transform 240ms cubic-bezier(0.22, 1, 0.36, 1);
+  transition: transform var(--dur-state) var(--ease-smooth);
 }
 
 .pressable:active {
   transform: scale(var(--press-scale));
-  transition-duration: 60ms;
+  transition-duration: 110ms;
 }
 
 /* A slow sheen for skeletons. Translating a gradient beats animating
@@ -402,12 +428,12 @@
   position: relative;
   transform: rotateX(var(--tilt-x)) rotateY(var(--tilt-y));
   transform-style: preserve-3d;
-  transition: transform 500ms cubic-bezier(0.22, 1, 0.36, 1);
+  transition: transform var(--dur-settle) var(--ease-smooth);
   will-change: transform;
 }
 
 .chart-stage__plane:hover {
-  transition-duration: 110ms;
+  transition-duration: var(--dur-track);
 }
 
 /* The layer that sells the depth. Pushed back far enough to shift visibly
@@ -448,7 +474,7 @@
   transform: translateZ(26px);
   pointer-events: none;
   opacity: var(--spot-o);
-  transition: opacity 300ms ease;
+  transition: opacity 450ms var(--ease-soft);
   background: radial-gradient(
     300px circle at var(--spot-x) var(--spot-y),
     color-mix(in oklab, var(--color-foreground) 7%, transparent),
@@ -460,7 +486,7 @@
    shadow a bigger radius just looks like a bigger slice. */
 .sector-lift {
   filter: drop-shadow(0 6px 14px color-mix(in oklab, black 45%, transparent));
-  transition: filter 220ms ease;
+  transition: filter var(--dur-state) var(--ease-soft);
 }
 
 /* Legend row linked to the chart. */
@@ -468,9 +494,9 @@
   border-radius: 0.375rem;
   padding-inline: 0.25rem;
   transition:
-    background-color 200ms ease,
-    opacity 200ms ease,
-    transform 200ms cubic-bezier(0.22, 1, 0.36, 1);
+    background-color var(--dur-state) var(--ease-soft),
+    opacity var(--dur-state) var(--ease-soft),
+    transform var(--dur-state) var(--ease-smooth);
 }
 
 .legend-row[data-active] {

@@ -41,10 +41,18 @@ export interface SpringConfig {
  * overshoot would read as a glitch rather than as life.
  */
 export const SPRING = {
-  snappy: { stiffness: 210, damping: 20, mass: 1 },
-  smooth: { stiffness: 120, damping: 18, mass: 1 },
-  gentle: { stiffness: 80, damping: 20, mass: 1 },
+  snappy: { stiffness: 170, damping: 22, mass: 1 },
+  smooth: { stiffness: 95, damping: 20, mass: 1 },
+  gentle: { stiffness: 62, damping: 21, mass: 1.1 },
 } satisfies Record<string, SpringConfig>;
+
+/**
+ * These were tuned down from a first pass that was too eager (210/120/80).
+ * A high-stiffness spring arrives almost immediately and then sits still,
+ * which reads as a jump rather than as movement. The damping is kept just
+ * under critical so there is a trace of overshoot — enough to feel physical,
+ * not enough to wobble.
+ */
 
 /**
  * A semi-implicit Euler spring.

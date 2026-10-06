@@ -255,8 +255,9 @@ export function TrendChart({ data, height = 280 }: { data: MonthlyTrendPoint[]; 
             Staged entrance: the bars rise, then the income line draws across
             them. Sequencing it this way means the line is read *against* the
             spending rather than alongside it, which is the comparison the
-            chart exists to make. The offsets are small — past about half a
-            second a chart stops feeling alive and starts feeling slow.
+            chart exists to make. Deliberately unhurried: the first pass was
+            quick enough that the sequence registered as a flicker rather
+            than as one thing happening after another.
           */}
           <Bar
             dataKey="Spending"
@@ -265,7 +266,7 @@ export function TrendChart({ data, height = 280 }: { data: MonthlyTrendPoint[]; 
             maxBarSize={28}
             isAnimationActive={!still}
             animationBegin={0}
-            animationDuration={520}
+            animationDuration={760}
             animationEasing="ease-out"
           />
           <Bar
@@ -275,8 +276,8 @@ export function TrendChart({ data, height = 280 }: { data: MonthlyTrendPoint[]; 
             maxBarSize={28}
             stackId="out"
             isAnimationActive={!still}
-            animationBegin={110}
-            animationDuration={520}
+            animationBegin={160}
+            animationDuration={760}
             animationEasing="ease-out"
           />
           <Line
@@ -287,8 +288,8 @@ export function TrendChart({ data, height = 280 }: { data: MonthlyTrendPoint[]; 
             dot={false}
             activeDot={{ r: 5, strokeWidth: 0 }}
             isAnimationActive={!still}
-            animationBegin={320}
-            animationDuration={680}
+            animationBegin={440}
+            animationDuration={980}
             animationEasing="ease-out"
           />
         </ComposedChart>
@@ -415,10 +416,12 @@ export function UtilizationTrendChart({
   height?: number;
 }) {
   const max = Math.max(60, ...data.map((d) => d.percent)) * 1.1;
+  const still = prefersReducedMotion();
 
   return (
-    <ResponsiveContainer width="100%" height={height}>
-      <ComposedChart data={data} margin={{ top: 8, right: 4, left: -20, bottom: 0 }}>
+    <ChartStage>
+      <ResponsiveContainer width="100%" height={height}>
+        <ComposedChart data={data} margin={{ top: 8, right: 4, left: -20, bottom: 0 }}>
         <defs>
           <linearGradient id="util-fill" x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stopColor={CHART_COLOURS[1]} stopOpacity={0.3} />
@@ -458,9 +461,19 @@ export function UtilizationTrendChart({
           strokeWidth={2}
           fill="url(#util-fill)"
           dot={{ r: 2.5 }}
+          /*
+            Drawn slowly on purpose. This is the curve that tells you whether
+            you have been living above the 30% line, and a shape that sweeps
+            out under the reference line is read rather than just seen.
+          */
+          isAnimationActive={!still}
+          animationDuration={950}
+          animationEasing="ease-out"
+          activeDot={{ r: 5, strokeWidth: 2, stroke: 'var(--color-background)' }}
         />
-      </ComposedChart>
-    </ResponsiveContainer>
+        </ComposedChart>
+      </ResponsiveContainer>
+    </ChartStage>
   );
 }
 
@@ -484,36 +497,55 @@ export function BalanceOverTimeChart({
     });
   }, [series]);
 
+  const still = prefersReducedMotion();
+
   return (
-    <ResponsiveContainer width="100%" height={height}>
-      <AreaChart data={rows} margin={{ top: 8, right: 4, left: -16, bottom: 0 }}>
-        <defs>
-          {series.map((s) => (
-            <linearGradient key={s.name} id={`grad-${s.name}`} x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor={s.colour} stopOpacity={0.35} />
-              <stop offset="100%" stopColor={s.colour} stopOpacity={0.02} />
-            </linearGradient>
-          ))}
-        </defs>
-        <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" vertical={false} />
-        <XAxis dataKey="month" tickFormatter={(m) => `M${m}`} {...AXIS} />
-        <YAxis tickFormatter={(v) => formatCompactINR(Math.round(v * 100), { noSymbol: true })} {...AXIS} />
-        <RechartsTooltip
-          content={<MoneyTooltip />}
-          labelFormatter={(label) => `Month ${String(label)}`}
-        />
-        <Legend wrapperStyle={{ fontSize: 11, paddingTop: 8 }} iconType="circle" iconSize={7} />
-        {series.map((s) => (
-          <Area
-            key={s.name}
-            type="monotone"
-            dataKey={s.name}
-            stroke={s.colour}
-            strokeWidth={2}
-            fill={`url(#grad-${s.name})`}
+    <ChartStage>
+      <ResponsiveContainer width="100%" height={height}>
+        <AreaChart data={rows} margin={{ top: 8, right: 4, left: -16, bottom: 0 }}>
+          <defs>
+            {series.map((s) => (
+              <linearGradient key={s.name} id={`grad-${s.name}`} x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor={s.colour} stopOpacity={0.35} />
+                <stop offset="100%" stopColor={s.colour} stopOpacity={0.02} />
+              </linearGradient>
+            ))}
+          </defs>
+          <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" vertical={false} />
+          <XAxis dataKey="month" tickFormatter={(m) => `M${m}`} {...AXIS} />
+          <YAxis tickFormatter={(v) => formatCompactINR(Math.round(v * 100), { noSymbol: true })} {...AXIS} />
+          <RechartsTooltip
+            content={<MoneyTooltip />}
+            labelFormatter={(label) => `Month ${String(label)}`}
+            cursor={{ stroke: 'var(--color-muted-foreground)', strokeDasharray: '3 3' }}
           />
-        ))}
-      </AreaChart>
-    </ResponsiveContainer>
+          <Legend wrapperStyle={{ fontSize: 11, paddingTop: 8 }} iconType="circle" iconSize={7} />
+          {series.map((s, i) => (
+            <Area
+              key={s.name}
+              type="monotone"
+              dataKey={s.name}
+              stroke={s.colour}
+              strokeWidth={2}
+              fill={`url(#grad-${s.name})`}
+              /*
+                Each balance curve draws after the one before it. On the cards
+                page these are competing payoff strategies, and on loans they
+                are competing prepayment scenarios — drawing them in sequence
+                lets the eye follow one line down before the next appears,
+                which is the comparison the chart is for. Capped so a long
+                series list cannot turn into a slideshow.
+              */
+              isAnimationActive={!still}
+              animationBegin={Math.min(i * 180, 540)}
+              animationDuration={900}
+              animationEasing="ease-out"
+              /* The hovered point reads as lifted off the curve. */
+              activeDot={{ r: 5, strokeWidth: 2, stroke: 'var(--color-background)' }}
+            />
+          ))}
+        </AreaChart>
+      </ResponsiveContainer>
+    </ChartStage>
   );
 }

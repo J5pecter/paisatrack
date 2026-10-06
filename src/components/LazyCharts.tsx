@@ -108,7 +108,29 @@ function Deferred({ height, children }: { height: number; children: React.ReactN
       { rootMargin: '400px' },
     );
     io.observe(el);
-    return () => io.disconnect();
+
+    /**
+     * Fail open, same as `Reveal`.
+     *
+     * If the observer never reports — a zero-height viewport, a tab panel that
+     * was display:none when this mounted, a backgrounded tab deferring
+     * callbacks — the chart does not stay unanimated, it stays a skeleton
+     * forever. Less brutal than vanishing content, but still a permanent
+     * placeholder where data should be.
+     *
+     * Longer than Reveal's backstop because this one pulls a 413 kB chunk:
+     * firing it eagerly would defeat the deferral it exists to protect. Three
+     * seconds is well past any genuine scroll-into-view.
+     */
+    const backstop = setTimeout(() => {
+      setNear(true);
+      io.disconnect();
+    }, 3000);
+
+    return () => {
+      clearTimeout(backstop);
+      io.disconnect();
+    };
   }, [near, isForced]);
 
   return (

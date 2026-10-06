@@ -160,6 +160,14 @@ Only `transform` and `opacity` are animated: the two properties the
 compositor handles without layout or paint. Springs carry velocity through
 interruptions, so a retargeted animation continues rather than restarting.
 
+Timing lives in four tokens on `:root` — `--dur-track` (280ms, following the
+pointer), `--dur-settle` (680ms, returning to rest), `--dur-reveal` (720ms) and
+`--dur-state` (320ms) — so the feel of the whole system is tuned in one place.
+The first pass was too eager: 90ms tracking makes a surface feel snapped-to
+rather than followed, which reads as nervous rather than responsive. The easing
+is easeOutCubic, not easeOutQuint — quint dumps most of its travel in the first
+few frames, which suits a dismissal and not a surface you are leaning on.
+
 **Reduced motion collapses all of it** — CSS and JS both check the query. Not a
 courtesy: parallax and spring overshoot are among the worst triggers for
 vestibular disorders. `Reveal` additionally fails *open*, with a 1200ms
