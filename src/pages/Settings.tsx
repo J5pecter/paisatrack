@@ -36,6 +36,7 @@ import {
   WarningIcon,
 } from '@/components/icons';
 import { PageHeader } from '@/components/layout/AppShell';
+import { InstallCard } from '@/components/InstallPrompt';
 import { CopyButton, LastUpdated } from '@/components/Chrome';
 import { db } from '@/lib/db/schema';
 import { bulkPut, getDeviceId } from '@/lib/db/repository';
@@ -168,6 +169,15 @@ export function Settings() {
                   aria-label="Dark mode"
                 />
               </label>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">This device</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <InstallCard />
             </CardContent>
           </Card>
 
@@ -403,7 +413,7 @@ function GitHubSyncCard({ syncState }: { syncState: SyncState }) {
             <button
               type="button"
               onClick={() => setShowToken((v) => !v)}
-              className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 hover:bg-[var(--color-accent)]"
+              className="tap absolute right-2 top-1/2 flex -translate-y-1/2 items-center justify-center rounded p-1 hover:bg-[var(--color-accent)]"
               aria-label={showToken ? 'Hide token' : 'Show token'}
             >
               {showToken ? <HideIcon className="h-3.5 w-3.5" /> : <ShowIcon className="h-3.5 w-3.5" />}

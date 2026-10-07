@@ -101,7 +101,7 @@ export function AppShell() {
 
             <button
               onClick={() => setCommandOpen(true)}
-              className="ml-auto flex items-center gap-2 rounded-md border border-[var(--color-border)] px-2.5 py-1.5 text-xs text-[var(--color-muted-foreground)] hover:bg-[var(--color-accent)] sm:min-w-56"
+              className="tap ml-auto flex items-center justify-center gap-2 rounded-md border border-[var(--color-border)] px-2.5 py-1.5 text-xs text-[var(--color-muted-foreground)] hover:bg-[var(--color-accent)] sm:min-w-56"
               aria-label="Open command palette"
             >
               <SearchIcon className="h-3.5 w-3.5" weight="bold" />
@@ -121,7 +121,7 @@ export function AppShell() {
             <Button
               size="sm"
               onClick={() => setQuickAddOpen(true)}
-              className="gap-1.5"
+              className="tap gap-1.5"
               aria-label="Add a record"
             >
               <PlusIcon className="h-4 w-4" weight="bold" />
@@ -130,7 +130,7 @@ export function AppShell() {
 
             <button
               onClick={toggleTheme}
-              className="rounded-md p-2 hover:bg-[var(--color-accent)] md:hidden"
+              className="tap flex items-center justify-center rounded-md p-2 hover:bg-[var(--color-accent)] md:hidden"
               aria-label="Toggle theme"
             >
               {theme === 'dark' ? <MoonIcon className="h-4 w-4" weight="fill" /> : <SunIcon className="h-4 w-4" weight="fill" />}

@@ -182,7 +182,7 @@ export function Accounts() {
                             type="button"
                             onClick={() => setEditing(account)}
                             aria-label={`Edit ${p.name}`}
-                            className="rounded-md p-1.5 text-[var(--color-muted-foreground)] transition-colors hover:bg-[var(--color-accent)] hover:text-[var(--color-foreground)]"
+                            className="tap-row inline-flex items-center justify-center rounded-md p-1.5 text-[var(--color-muted-foreground)] transition-colors hover:bg-[var(--color-accent)] hover:text-[var(--color-foreground)]"
                           >
                             <EditIcon className="h-4 w-4" />
                           </button>
@@ -190,7 +190,7 @@ export function Accounts() {
                             type="button"
                             onClick={() => setConfirmDelete(account)}
                             aria-label={`Delete ${p.name}`}
-                            className="rounded-md p-1.5 text-[var(--color-muted-foreground)] transition-colors hover:bg-[var(--color-danger)]/10 hover:text-[var(--color-danger)]"
+                            className="tap-row inline-flex items-center justify-center rounded-md p-1.5 text-[var(--color-muted-foreground)] transition-colors hover:bg-[var(--color-danger)]/10 hover:text-[var(--color-danger)]"
                           >
                             <DeleteIcon className="h-4 w-4" />
                           </button>

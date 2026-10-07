@@ -32,7 +32,7 @@ export function SyncIndicator() {
       <button
         onClick={() => void syncEngine.syncNow()}
         className={cn(
-          'flex items-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium transition-colors hover:bg-[var(--color-accent)]',
+          'tap flex items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium transition-colors hover:bg-[var(--color-accent)]',
           colour,
         )}
         aria-label={`Sync status: ${label}. Click to sync now.`}

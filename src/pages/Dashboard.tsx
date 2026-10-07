@@ -32,6 +32,7 @@ import {
 } from '@/components/ui';
 import { PageHeader } from '@/components/layout/AppShell';
 import { Money } from '@/components/Money';
+import { InstallBanner } from '@/components/InstallPrompt';
 import { Reveal, TiltCard } from '@/components/motion';
 import { staggerDelay } from '@/lib/motion';
 import { CategoryDonut, TrendChart } from '@/components/LazyCharts';
@@ -120,6 +121,9 @@ export function Dashboard() {
           </Button>
         }
       />
+
+      {/* Shown once, on mobile only, and only until waved away. */}
+      <InstallBanner />
 
       {(overdue.length > 0 || dueSoon.length > 0) && (
         <div

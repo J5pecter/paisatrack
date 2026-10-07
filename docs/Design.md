@@ -174,6 +174,28 @@ vestibular disorders. `Reveal` additionally fails *open*, with a 1200ms
 backstop, because its hidden state is `opacity: 0` — if the observer never
 reported, the content would not be unanimated, it would be gone.
 
+### Touch targets
+
+A fingertip is about 9mm; Apple and Material both land on ~44px as the smallest
+thing a person can reliably hit. Much of this UI was designed against a mouse
+and sat at 28-36px — an audit across all twelve routes at 375px found roughly
+380 controls under the threshold, the worst being the 16px checkbox the
+expenses table renders once per row.
+
+All of it is scoped to `@media (pointer: coarse)`. Enlarging everything
+unconditionally would waste the density that makes a table of expenses
+scannable, and this is a phone problem.
+
+| Control | Fix |
+| --- | --- |
+| Buttons (`.btn`) | `min-width/min-height: 40px`. min-* rather than height, so it wins over the `h-7 w-7` that icon buttons are written with. |
+| Checkbox, switch | Visual size unchanged; a 40px invisible `::after` extends the reachable area. Making them visually bigger would wreck the table. |
+| Tabs, select triggers | `min-height: 40px` via `[role="tab"]`, `[role="combobox"]`. |
+| Header controls | `.tap` utility, 44px. |
+
+Verified at 375px: **0 undersized controls across all twelve routes**, and
+Lighthouse's own tap-target audit passes.
+
 ### Spacing
 
 Tailwind's 4px scale. Card padding `p-4` / `sm:p-5`; grid gaps `gap-4` / `gap-5`;

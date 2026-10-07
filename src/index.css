@@ -522,3 +522,76 @@
   }
 }
 
+
+/* ---------------------------------------------------------------------------
+   Touch targets
+   ---------------------------------------------------------------------------
+   A fingertip is about 9mm; Apple and Material both land on ~44px as the
+   smallest thing a person can reliably hit. Several controls here are 28-32px
+   because they were designed against a mouse pointer, which is precise.
+
+   Scoped to `pointer: coarse` on purpose. Enlarging everything unconditionally
+   would make the desktop UI clumsy and waste the density that makes a table of
+   expenses readable — this is a phone problem, so it gets a phone fix.
+   --------------------------------------------------------------------------- */
+@media (pointer: coarse) {
+  .tap {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  /* Row actions inside a table: the icon stays the same size, the reachable
+     area grows around it. Tables have the vertical room; the icons do not need
+     to get visually bigger to get easier to hit. */
+  .tap-row {
+    min-width: 40px;
+    min-height: 40px;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Touch targets, continued: the shared primitives
+   ---------------------------------------------------------------------------
+   Fixing these in the components rather than at call sites means one change
+   covers every page. A 16px checkbox is the worst offender in the app — the
+   expenses table renders one per row, and on a phone it is almost unhittable.
+
+   The checkbox and switch keep their visual size and gain an invisible overlay
+   instead. Making them visually bigger would wreck the density that makes a
+   table of expenses scannable, and the density is the point of that screen.
+   --------------------------------------------------------------------------- */
+@media (pointer: coarse) {
+  /* Buttons grow a little. min-* rather than height so it wins over the
+     `h-7 w-7` that icon buttons are written with — those were the 28px
+     edit/delete controls in every table row. */
+  .btn {
+    min-width: 40px;
+    min-height: 40px;
+  }
+
+  /* Radix tabs render role="tab"; py-1 left them at 28px. Select triggers
+     render role="combobox" and sat at h-9. */
+  [role='tab'],
+  [role='combobox'] {
+    min-height: 40px;
+  }
+
+  [role='checkbox'],
+  [role='switch'] {
+    position: relative;
+  }
+
+  /* 40px rather than 44px: centred on a 16px checkbox this already reaches
+     12px past each edge, and going wider starts stealing taps from whatever
+     sits beside it in the row. */
+  [role='checkbox']::after,
+  [role='switch']::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 40px;
+    height: 40px;
+    transform: translate(-50%, -50%);
+  }
+}

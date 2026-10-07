@@ -112,6 +112,7 @@ export {
   Drop as WaterIcon,
   WifiHigh as InternetIcon,
   DeviceMobile as MobileIcon,
+  Export as ShareIcon,
   Flame as GasIcon,
   Television as DthIcon,
   Broom as MaidIcon,

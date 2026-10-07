@@ -67,7 +67,7 @@ export function BackToTop() {
       aria-label="Back to top"
       className={cn(
         'fixed bottom-20 right-4 z-40 md:bottom-6',
-        'rounded-full border border-[var(--color-border)] bg-[var(--color-card)] p-2.5 shadow-lg',
+        'tap flex items-center justify-center rounded-full border border-[var(--color-border)] bg-[var(--color-card)] p-2.5 shadow-lg',
         'transition-all duration-200 hover:bg-[var(--color-accent)]',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]',
         show ? 'translate-y-0 opacity-100' : 'pointer-events-none translate-y-2 opacity-0',
@@ -131,7 +131,7 @@ export function CopyButton({
       aria-label={copied ? 'Copied' : label}
       className={cn(
         'inline-flex items-center gap-1.5 rounded-md border border-[var(--color-border)]',
-        'px-2 py-1 text-xs transition-colors hover:bg-[var(--color-accent)]',
+        'tap px-2 py-1 text-xs transition-colors hover:bg-[var(--color-accent)]',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]',
         copied && 'border-[var(--color-success)]/50 text-[var(--color-success)]',
         className,
