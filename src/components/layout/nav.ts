@@ -17,6 +17,7 @@ import {
   InvestmentIcon,
   LoanIcon,
   ReportIcon,
+  UploadIcon,
   SettingsIcon,
   TipIcon,
 } from '@/components/icons';
@@ -41,6 +42,7 @@ export const NAV_ITEMS: NavItem[] = [
   { to: '/budgets', label: 'Budgets', icon: BudgetIcon },
   { to: '/investments', label: 'Invest', icon: InvestmentIcon },
   { to: '/reports', label: 'Reports', icon: ReportIcon },
+  { to: '/import', label: 'Import', icon: UploadIcon },
   { to: '/settings', label: 'Settings', icon: SettingsIcon },
   { to: '/help', label: 'Help', icon: TipIcon },
 ];

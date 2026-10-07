@@ -102,6 +102,7 @@ bank credentials.
 | F16 | **Help** — where the data lives, what sync costs, why interest was charged | Worked examples are computed by the engine at render, so the page cannot quote a stale figure |
 | F17 | **Mobile secondary navigation** — four tabs plus a "More" sheet | Every page is reachable on a phone without a keyboard |
 | F18 | **Cash and bank** — confirmed balances, spending attributed per account, recount with drift | Net worth counts liquid assets; the gap between expected and counted is named rather than absorbed |
+| F20 | **Statement import** — bank, card, UPI app and mutual-fund CAS, from PDF or CSV | Read in the browser; every row reviewed before anything is written; re-importing an overlapping period is safe |
 | F19 | **Install to home screen** — real prompt on Android/Chrome, Share-sheet instructions on iOS | Opens full-screen and offline; the prompt is dismissible and never returns, but Settings keeps the option |
 
 ### 5.2 Explicitly deferred

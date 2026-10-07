@@ -127,6 +127,12 @@ PaisaTrack/
     │   │   ├── merge.ts         Conflict rules (pure, tested)
     │   │   └── engine.ts        Background push/pull
     │   ├── github/client.ts     Octokit wrapper, lazy-loaded
+    │   ├── import/
+    │   │   ├── tokens.ts        Indian dates and amounts (pure)
+    │   │   ├── statement.ts     Text -> transactions (pure)
+    │   │   ├── detect.ts        Document type and CAS holdings (pure)
+    │   │   ├── pdf.ts           Lazy pdf.js, column-preserving extraction
+    │   │   └── index.ts         File -> reviewable candidates
     │   ├── validation.ts        Zod schemas for anything imported
     │   ├── motion.ts            Spring integrator, reduced-motion guard
     │   └── utils.ts             cn(), humanise()
@@ -241,6 +247,7 @@ polling is effectively free.
 | Lazy chart loading | `LazyCharts.tsx` | 413 kB deferred past first paint, and not mounted until the chart is within 400 px of the viewport |
 | Lazy Octokit | `github/client.ts` | 105 kB never loaded without sync |
 | Lazy jsPDF | `Reports.tsx` | 733 kB only on PDF export |
+| Lazy pdf.js | `import/pdf.ts` | 421 kB plus a worker, only when a statement PDF is picked |
 | Precache everything | Workbox config | 2.38 MB, so every page works offline from the first visit |
 | ETag conditional polling | `github/client.ts` | 304s cost no quota |
 | Atomic dashboard read | `useData.ts` | One IndexedDB round trip, not twelve |

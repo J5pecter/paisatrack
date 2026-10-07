@@ -255,7 +255,7 @@ test.describe('income', () => {
 });
 
 test.describe('navigation and layout', () => {
-  const ROUTES = ['', 'accounts', 'expenses', 'cards', 'loans', 'bills', 'income', 'budgets', 'investments', 'reports', 'settings', 'help'];
+  const ROUTES = ['', 'accounts', 'expenses', 'cards', 'loans', 'bills', 'income', 'budgets', 'investments', 'reports', 'import', 'settings', 'help'];
 
   test('every route loads without a crash', async ({ page }) => {
     await freshApp(page);
@@ -315,7 +315,7 @@ test.describe('navigation and layout', () => {
     const sheet = page.getByRole('dialog');
     await expect(sheet).toBeVisible();
 
-    for (const label of ['Loans', 'Bills', 'Income', 'Budgets', 'Invest', 'Reports', 'Settings', 'Help']) {
+    for (const label of ['Loans', 'Bills', 'Income', 'Budgets', 'Invest', 'Reports', 'Import', 'Settings', 'Help']) {
       await expect(sheet.getByRole('link', { name: label, exact: true })).toBeVisible();
     }
 
