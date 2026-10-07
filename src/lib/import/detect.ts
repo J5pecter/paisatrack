@@ -66,9 +66,47 @@ export interface ParsedHolding {
   invested?: Paise;
 }
 
+export type CasTxnKind = 'PURCHASE' | 'SIP' | 'REDEMPTION' | 'SWITCH' | 'DIVIDEND' | 'OTHER';
+
+export interface CasTxn {
+  date: string;
+  /** The scheme the row belongs to, carried down from its block header. */
+  scheme: string;
+  folio?: string;
+  kind: CasTxnKind;
+  description: string;
+  /** Rupees moved. Always a magnitude; `kind` carries the direction. */
+  amount: Paise;
+  units?: number;
+  nav?: Paise;
+}
+
 export interface CasResult {
   holdings: ParsedHolding[];
+  transactions: CasTxn[];
   warnings: string[];
+}
+
+/**
+ * What kind of movement is this row?
+ *
+ * A CAS describes the same handful of events in wording that varies between
+ * registrars and has drifted over the years, so this matches on the words that
+ * have stayed put. Order matters: an SIP instalment is also a purchase, and
+ * the more specific reading is the useful one.
+ */
+function classifyCasRow(text: string): CasTxnKind | null {
+  const s = text.toLowerCase();
+
+  // A stamp duty or STT line is a fee attached to the row above, not an event.
+  if (/stamp duty|stt paid|transaction charge/.test(s)) return null;
+
+  if (/systematic|sip\b/.test(s)) return 'SIP';
+  if (/switch/.test(s)) return 'SWITCH';
+  if (/dividend|idcw|payout/.test(s)) return 'DIVIDEND';
+  if (/redemption|redeem|withdrawal/.test(s)) return 'REDEMPTION';
+  if (/purchase|investment|subscription|allot/.test(s)) return 'PURCHASE';
+  return null;
 }
 
 /**
@@ -80,13 +118,16 @@ export interface CasResult {
  * than fixed positions — the labels have been stable for years where the
  * geometry has not.
  *
- * Deliberately reads only *holdings*, not the individual transactions a CAS
- * also contains. Someone importing a CAS wants to know what they hold; the
- * purchase history is a different and much larger problem, and importing it
- * half-right would be worse than not importing it.
+ * Reads both halves of the document in one pass: the holdings, and the dated
+ * movements inside each scheme block. They are kept apart downstream because
+ * they answer different questions — holdings are what you own now, the
+ * movements are how you got there — and because a valuation row and a purchase
+ * row look almost identical until you notice only one of them starts with a
+ * date.
  */
 export function parseCas(lines: string[]): CasResult {
   const holdings: ParsedHolding[] = [];
+  const transactions: CasTxn[] = [];
   const warnings: string[] = [];
 
   let currentName: string | null = null;
@@ -142,6 +183,46 @@ export function parseCas(lines: string[]): CasResult {
       continue;
     }
 
+    // A dated line inside a scheme block is a movement in that scheme.
+    // Checked before the labelled-figure rules below, because a purchase row
+    // also carries a NAV and would otherwise be read as a valuation.
+    const dated = /^(\d{1,2}[-/][A-Za-z0-9]{2,9}[-/]\d{2,4})\s+(.*)$/.exec(line);
+    if (dated && currentName) {
+      const date = parseLooseDate(dated[1]);
+      const kind = classifyCasRow(dated[2]);
+      if (date && kind) {
+        /*
+          A CAS row prints amount, then units, then NAV, then a running unit
+          balance — a known column order, so they are read positionally.
+
+          Deliberately NOT via findAmounts. That reader is money-shaped: it
+          matches two decimal places, so a unit count of 8.456 comes back as
+          8.45 and the third decimal is silently lost. Units are not money and
+          routinely carry three or four decimals.
+        */
+        const figures = dated[2].match(/\d[\d,]*\.\d+/g) ?? [];
+        const amount = figures[0] ? parseIndianAmount(figures[0]) : null;
+        const toNumber = (s: string | undefined) =>
+          s === undefined ? undefined : Number(s.replace(/,/g, ''));
+
+        if (amount !== null && amount !== 0) {
+          transactions.push({
+            date,
+            scheme: squash(currentName).slice(0, 120),
+            folio: currentFolio,
+            kind,
+            description: squash(dated[2].replace(/[\d,.\s]+$/, '')).slice(0, 120),
+            amount: Math.abs(amount),
+            units: toNumber(figures[1]),
+            // NAV is money, so paise is the right unit — it rounds a
+            // four-decimal NAV to the paisa, which nothing here computes with.
+            nav: figures[2] ? (parseIndianAmount(figures[2]) ?? undefined) : undefined,
+          });
+        }
+      }
+      continue;
+    }
+
     const unitMatch = /closing\s*(?:unit)?\s*balance\s*[:.]?\s*([\d,]+\.?\d*)/i.exec(line);
     if (unitMatch) {
       const n = Number(unitMatch[1].replace(/,/g, ''));
@@ -160,13 +241,13 @@ export function parseCas(lines: string[]): CasResult {
     }
   }
 
-  if (holdings.length === 0) {
+  if (holdings.length === 0 && transactions.length === 0) {
     warnings.push(
       'No holdings could be read. CAS layouts differ between CAMS, KFintech and the depositories — if this one is not recognised, the holdings can be entered on the Investments page instead.',
     );
   }
 
-  return { holdings, warnings };
+  return { holdings, transactions, warnings };
 }
 
 /**

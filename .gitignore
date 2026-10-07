@@ -39,3 +39,8 @@ data.json
 lighthouse-report.report.*
 /blob-report/
 /playwright/.cache/
+
+# Vendored OCR engine: ~14 MB of binaries copied from node_modules by
+# scripts/vendor-ocr.mjs on every build. npm pins the versions; git should not
+# carry the bytes.
+public/tesseract/

@@ -207,6 +207,21 @@ GitHub Pages controls response headers, so CSP is delivered via `<meta>` in
 `index.html`. It is restrictive: `connect-src` allows only `api.github.com`.
 Any change that needs a new origin must say why in the commit message.
 
+`script-src` carries `'wasm-unsafe-eval'`, which permits WebAssembly
+instantiation and nothing else — not `eval()` of JavaScript. The OCR engine
+needs it.
+
+**The OCR engine is self-hosted, and that is a security decision, not a
+packaging one.** Tesseract.js defaults to fetching its worker, its WebAssembly
+core and its language model from jsdelivr, and it loads the core *inside the
+worker with `importScripts()`* — which `script-src` governs, not
+`connect-src`. Taking the default would therefore have meant
+`script-src https://cdn.jsdelivr.net`: a third party with script execution in
+the origin that holds someone's finances. `scripts/vendor-ocr.mjs` copies the
+assets out of `node_modules` at build time instead, which keeps the policy at
+`'self'`, makes a scan readable offline, and survives networks that block the
+CDN. Do not "simplify" this by deleting the vendoring step.
+
 ### 4.7 Production hygiene
 
 - No `console.log` in shipped code (oxlint enforces; `warn`/`error` allowed).
@@ -222,15 +237,15 @@ Any change that needs a new origin must say why in the commit message.
 | Metric | Budget | Measured |
 | --- | --- | --- |
 | Initial JS (transferred) | ≤ 300 kB | **284 kB** across 16 files |
-| Precache total | ≤ 1.5 MB | **2.38 MB** — over, see below |
+| Precache total | ≤ 1.5 MB | **2.96 MB** — over, see below |
 | Any single eager chunk | ≤ 150 kB gzipped | **119 kB** (`react`) |
 | Lighthouse performance | ≥ 90 | **92** |
 | Lighthouse accessibility | ≥ 95 | **100** |
 | Lighthouse best practices | — | **100** |
 | Lighthouse SEO | — | **100** |
 
-Measured 1 Oct 2026 against the production build on Lighthouse's mobile preset
-(4× CPU throttle, 1.6 Mbps): FCP 2.1 s, LCP 3.1 s, TBT 10 ms, CLS 0, SI 2.1 s.
+Measured 7 Oct 2026 against the production build on Lighthouse's mobile preset
+(4× CPU throttle, 1.6 Mbps): FCP 2.1 s, LCP 3.1 s, TBT 80 ms, CLS 0, SI 2.1 s.
 Re-measure with:
 
 ```bash
@@ -240,13 +255,22 @@ npm run build && npx vite preview --port 4180 --strictPort
 Exceeding a budget is not forbidden — it needs a line here saying what was
 bought with it.
 
-**Precache, 2.38 MB against a 1.5 MB budget.** Bought: every page, every chart,
+**Precache, 2.96 MB against a 1.5 MB budget.** Bought: every page, every chart,
 CSV import and PDF export all work offline from the first visit, which is a
 stated product requirement. The earlier carve-outs excluded chunks by name, and
 when those names stopped existing the exclusions silently matched nothing — a
 budget kept by accident is worse than one knowingly spent. Precaching is a
 background service-worker install and does not compete with first paint, which
 is why the number that actually matters, initial JS, is still inside budget.
+
+**The OCR engine is deliberately NOT in that 2.96 MB.** `public/tesseract/` is
+about 14 MB of WebAssembly cores and a language model, and `globIgnores`
+excludes it from the precache. Shipping it in the service-worker install would
+make every first visit pay for a feature most people never open, on connections
+that in India are frequently metered. It is cached at runtime on first use
+instead, so the *second* scan works offline and the first one is honest about
+what it costs. A given device downloads one core (~3.8 MB) plus the model
+(~2.9 MB), once.
 
 ### Rules
 

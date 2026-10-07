@@ -103,8 +103,10 @@ PaisaTrack/
 ├── tests/                     Vitest unit specs
 ├── scripts/
 │   ├── gen-icons.mjs          PWA icons generated from scratch, no deps
+│   ├── vendor-ocr.mjs         Copies the OCR engine out of node_modules
 │   └── fetch-rates.mjs        Monthly MCLR refresh, fails quietly
 ├── public/                    Icons, favicon
+│   └── tesseract/             Vendored OCR engine (gitignored, built)
 ├── .github/workflows/         deploy · ci · refresh-rates
 └── src/
     ├── lib/
@@ -178,6 +180,9 @@ run in seven seconds.
 | Components | Radix + shadcn patterns | Copied in, owned here. Compatible with [21st.dev](https://21st.dev). |
 | Icons | Phosphor | Six weights, and a real `CurrencyInr` glyph. |
 | Charts | Recharts, lazy | 418 kB — deferred until a chart renders. |
+| PDF reading | pdf.js, lazy | Extraction, not OCR — portal statements have a real text layer. Loaded only when a PDF is picked. |
+| Spreadsheets | fflate + DOMParser | Hand-rolled XLSX reader. npm `xlsx` 0.18.5 carries an unpatched prototype-pollution CVE; fflate was already a dependency. |
+| OCR | tesseract.js, self-hosted | Scans only, offered not automatic. Served from our own origin — the CDN default would have needed `script-src` for a third party. See Rules §4.6. |
 | Money | big.js | Never float. See Rules. |
 | Validation | Zod | Everything crossing the trust boundary. |
 | PWA | vite-plugin-pwa / Workbox | Precache everything the build emits, so the whole app works offline from the first visit. |
@@ -255,7 +260,61 @@ polling is effectively free.
 | Debounced search | `Expenses.tsx` | Filtering 64+ rows on every keystroke |
 | Progressive list rendering | `Expenses.tsx` | Renders a growing window (100 rows, extended by an IntersectionObserver) rather than 1,000 at once. Not true virtualisation — rows are not recycled — and the other list pages do not use it yet. |
 
-## 8. What this architecture cannot do
+## 8. Statement import
+
+A file goes in; reviewable candidates come out. Nothing reaches the database
+without the user ticking it, because a parser working across a dozen bank
+layouts will misread some of them and a wrong row in someone's finances is
+worse than a missing one.
+
+```
+file ──▶ sniff the BYTES, not the extension
+          │
+          ├─ PDF ──▶ pdf.ts: extract text, rebuilding each page as
+          │            fixed-width lines so column positions survive
+          │            │
+          │            └─ no text layer? ──▶ NeedsOcr ──▶ offer, don't act
+          │                                    │
+          │                                    └─ ocr.ts (tesseract, local)
+          ├─ XLSX / HTML-table .xls / CSV ──▶ spreadsheet.ts ──▶ padded lines
+          │
+          └──────────────▶ detect.ts  (BANK | CARD | UPI | CAS)
+                                │
+                    CAS ────────┴──────── everything else
+                     │                         │
+                 parseCas()            extractTransactions()
+                     │                         │
+                     └──────────▶ dedupe ──▶ REVIEW SCREEN ──▶ repository
+```
+
+Three decisions carry most of the weight:
+
+**Extraction, not OCR, by default.** Indian bank, card and CAS statements
+downloaded from a portal are digitally generated and carry a real text layer.
+The characters are already in the file, exact, with coordinates. OCR is both
+heavier and less accurate; reaching for it first would be slower *and* worse.
+It exists only for a photograph or a scan, it is offered rather than run, and
+everything it produces is forced to LOW confidence.
+
+**Direction is decided by a ranked hierarchy, and the order is load-bearing.**
+Running-balance arithmetic first (previous balance − amount = this balance),
+then which column the figure was printed in, then Dr/Cr wording. The column
+signal is the strongest-looking one and it is *second*, because OCR collapses
+runs of whitespace and destroys it — while the balance check is arithmetic and
+survives a scan intact. `ocr-output.test.ts` pins this against literal
+tesseract output.
+
+**Bytes over extensions.** Half the `.xls` files Indian bank portals emit are
+HTML tables. Excel opens them; every real XLSX parser rejects them. Trusting
+the extension would mean telling someone their perfectly good statement is
+corrupt.
+
+Re-importing an overlapping period is safe: rows are fingerprinted on
+date + amount + normalised description, and anything already stored arrives
+pre-unticked rather than silently dropped, so the user can see what was
+skipped.
+
+## 9. What this architecture cannot do
 
 Stated plainly, because a reader will otherwise ask:
 

@@ -102,7 +102,8 @@ bank credentials.
 | F16 | **Help** — where the data lives, what sync costs, why interest was charged | Worked examples are computed by the engine at render, so the page cannot quote a stale figure |
 | F17 | **Mobile secondary navigation** — four tabs plus a "More" sheet | Every page is reachable on a phone without a keyboard |
 | F18 | **Cash and bank** — confirmed balances, spending attributed per account, recount with drift | Net worth counts liquid assets; the gap between expected and counted is named rather than absorbed |
-| F20 | **Statement import** — bank, card, UPI app and mutual-fund CAS, from PDF or CSV | Read in the browser; every row reviewed before anything is written; re-importing an overlapping period is safe |
+| F20 | **Statement import** — bank, card, UPI app and mutual-fund CAS, from PDF, XLSX, a bank portal’s HTML-masquerading-as-`.xls`, or CSV | Read in the browser; every row reviewed before anything is written; re-importing an overlapping period is safe |
+| F21 | **Scanned statements** — OCR for a photograph or a scan with no text layer | Offered, never automatic; the engine is served from our own origin, so it works offline and needs no third-party script; every row it produces is marked unverified and nothing is pre-selected |
 | F19 | **Install to home screen** — real prompt on Android/Chrome, Share-sheet instructions on iOS | Opens full-screen and offline; the prompt is dismissible and never returns, but Settings keeps the option |
 
 ### 5.2 Explicitly deferred
@@ -113,7 +114,7 @@ bank credentials.
 | Bank feeds | Not free, needs a TSP licence | Account aggregator integration |
 | Multi-currency | Out of scope for the target user | FX rates, a rate source |
 | Shared/family accounts | Single-user by design | Auth, a server, permissions |
-| Receipt OCR | Needs a vision model or a paid API | Either a server or a paid key |
+| Receipt OCR | A receipt is a photograph of prose; a statement is a table with a known shape to parse against. That is why F21 ships and this does not — reading a receipt usefully needs a vision model, not character recognition | A vision model, which means a server or a paid key |
 
 ## 6. Success criteria
 
@@ -126,7 +127,9 @@ The product is working if:
 3. **It works with the network off**, including the first visit after install.
 4. **It costs ₹0** and never asks for a card.
 5. **Nothing leaves the device** except to `api.github.com`, and only when the
-   user has explicitly configured sync.
+   user has explicitly configured sync. Statements — including scanned ones,
+   which are read by an OCR engine served from our own origin — are parsed in
+   the browser and never uploaded.
 
 ## 7. Constraints and risks
 

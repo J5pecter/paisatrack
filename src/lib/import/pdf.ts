@@ -113,10 +113,18 @@ export async function extractPdfText(data: ArrayBuffer, password?: string): Prom
     import.meta.url,
   ).toString();
 
-  // Kept in scope so the worker can be torn down afterwards: in pdf.js 6
-  // `destroy()` lives on the loading task, not on the document.
+  /*
+    Kept in scope so the worker can be torn down afterwards: in pdf.js 6
+    `destroy()` lives on the loading task, not on the document.
+
+    The data is a COPY, deliberately. pdf.js transfers the buffer it is given to its
+    worker, which detaches the original — so a second pass over the same file
+    (checking the page count, then rendering it for OCR) would throw "Cannot
+    perform Construct on a detached ArrayBuffer". Slicing costs one allocation
+    and makes the caller's buffer reusable.
+  */
   const task = pdfjs.getDocument({
-    data: new Uint8Array(data),
+    data: new Uint8Array(data.slice(0)),
     password: password || undefined,
     // Nothing is fetched from the network: no remote fonts, no external
     // resources. A statement should never cause an outbound request.
@@ -153,7 +161,7 @@ export async function extractPdfText(data: ArrayBuffer, password?: string): Prom
 
   if (lines.length === 0) {
     throw new PdfUnreadable(
-      'This PDF has no text layer — it is a scan or a photograph. Reading those needs OCR, which PaisaTrack does not do. Download the statement from your bank or card portal instead; those are always text.',
+      'This PDF has no text layer — it is a scan or a photograph.',
     );
   }
 

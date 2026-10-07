@@ -13,13 +13,24 @@
  */
 import Papa from 'papaparse';
 import { checkImportFile, MAX_IMPORT_BYTES } from '@/lib/validation';
-import { detectPeriod, detectStatement, parseCas, type ParsedHolding } from './detect';
-import { extractTransactions, type ParsedTxn, type StatementKind } from './statement';
+import { detectPeriod, detectStatement, parseCas, type CasTxn, type ParsedHolding } from './detect';
+import {
+  extractTransactions,
+  fingerprint as casFingerprint,
+  type ParsedTxn,
+  type StatementKind,
+} from './statement';
 import { extractPdfText } from './pdf';
+
+/** "PURCHASE" -> "Purchase". The kinds are already readable, just shouty. */
+function humaniseKind(kind: CasTxn['kind']): string {
+  return kind.charAt(0) + kind.slice(1).toLowerCase();
+}
 
 export { PasswordRequired, PdfUnreadable } from './pdf';
 export type { ParsedTxn } from './statement';
-export type { ParsedHolding } from './detect';
+export type { CasTxn, ParsedHolding } from './detect';
+export type { OcrProgress } from './ocr';
 
 export interface ImportResult {
   kind: StatementKind;
@@ -27,9 +38,31 @@ export interface ImportResult {
   period: { from: string; to: string } | null;
   transactions: ParsedTxn[];
   holdings: ParsedHolding[];
+  /** Dated movements from a CAS: SIPs, purchases, redemptions. */
+  casTransactions: CasTxn[];
   warnings: string[];
-  /** For the "we read N pages / N rows" line, so a bad parse is obvious. */
+  /** For the "we read N pages / N lines" line, so a bad parse is obvious. */
   stats: { pages?: number; lines: number };
+  /** True when the rows came from OCR and are therefore all suspect. */
+  viaOcr: boolean;
+}
+
+/**
+ * Raised when a PDF has no text layer.
+ *
+ * Carries the bytes so the caller can offer OCR without asking for the file
+ * again, and so running OCR stays an explicit choice rather than something
+ * that happens silently behind a long spinner.
+ */
+export class NeedsOcr extends Error {
+  constructor(
+    readonly data: ArrayBuffer,
+    readonly password: string | undefined,
+    readonly pages: number,
+  ) {
+    super('This PDF has no text layer.');
+    this.name = 'NeedsOcr';
+  }
 }
 
 /** Read a picked file into memory, with the same size guard as every other import. */
@@ -47,71 +80,91 @@ async function readFile(file: File): Promise<ArrayBuffer> {
  *
  * Several banks and all three UPI apps offer CSV, and it is always better than
  * the PDF: the columns are already separated, so nothing has to be inferred
- * from layout. The rows are flattened back to text lines and handed to the same
- * extractor, which keeps one set of rules for direction and categories rather
- * than two that can disagree.
+ * from layout. The rows are flattened back to padded text lines and handed to
+ * the same extractor, which keeps one set of rules for direction and category
+ * rather than two that can disagree.
  */
 function linesFromCsv(text: string): string[] {
   const parsed = Papa.parse<string[]>(text, { skipEmptyLines: true });
   return (parsed.data as string[][])
     .filter((row) => Array.isArray(row))
-    // Padded so columns stay at stable offsets — the extractor reads debit
-    // versus credit from horizontal position, which a plain join would destroy.
     .map((row) => row.map((cell) => String(cell ?? '').trim().padEnd(18)).join(' '));
 }
 
 /**
- * Parse a statement into candidates.
+ * Turn extracted lines into a reviewable result.
  *
- * Throws `PasswordRequired` when a PDF is encrypted, which most Indian bank and
- * card statements are. The caller collects the password and calls again.
+ * Shared by the text and OCR paths so both go through exactly the same
+ * detection, extraction and category rules — the only difference being that
+ * OCR output is never trusted.
  */
-export async function parseStatement(file: File, password?: string): Promise<ImportResult> {
-  const isPdf = /\.pdf$/i.test(file.name);
-
-  if (!isPdf) {
-    const check = checkImportFile(file, 'csv');
-    if (!check.ok) throw new Error(check.message ?? 'That file cannot be read.');
-  }
-
-  const buffer = await readFile(file);
-
-  let lines: string[];
-  let pages: number | undefined;
-
-  if (isPdf) {
-    const text = await extractPdfText(buffer, password);
-    lines = text.lines;
-    pages = text.pages;
-  } else {
-    lines = linesFromCsv(new TextDecoder().decode(buffer));
-  }
-
+function buildResult(lines: string[], pages: number | undefined, viaOcr: boolean): ImportResult {
   const { kind, source } = detectStatement(lines);
   const period = detectPeriod(lines);
 
-  // A CAS is a list of what you hold, not of what you spent. Running the
-  // transaction extractor over one would turn every valuation row into a
-  // purchase, which is why the two paths are kept apart.
+  // A CAS describes what you hold and how you got there. Running the
+  // transaction extractor over one would read every valuation row as a
+  // purchase, so the two are parsed separately.
   if (kind === 'CAS') {
     const cas = parseCas(lines);
+
+    /*
+      The dated movements become ordinary transactions so they can go through
+      the same review screen as everything else. An SIP instalment is money
+      leaving a bank account for a fund — it is an outflow, categorised as
+      INVESTMENT. A redemption is the same money coming back.
+
+      Switches are excluded: a switch moves value between two schemes without
+      anything leaving the bank, so importing one as an expense would invent
+      spending that never happened.
+    */
+    const asTransactions: ParsedTxn[] = cas.transactions
+      .filter((t) => t.kind !== 'SWITCH')
+      .map((t) => {
+        const direction = t.kind === 'REDEMPTION' || t.kind === 'DIVIDEND' ? 'CREDIT' : 'DEBIT';
+        const description = `${t.kind === 'SIP' ? 'SIP' : humaniseKind(t.kind)} · ${t.scheme}`;
+        return {
+          date: t.date,
+          description,
+          amount: t.amount,
+          direction,
+          category: 'INVESTMENT' as const,
+          // The registrar prints these in a fixed column order, so they are
+          // read positionally rather than inferred.
+          confidence: viaOcr ? ('LOW' as const) : ('HIGH' as const),
+          fingerprint: casFingerprint(t.date, t.amount, description),
+        };
+      });
+
     return {
       kind,
       source,
       period,
-      transactions: [],
+      transactions: asTransactions,
       holdings: cas.holdings,
+      casTransactions: cas.transactions,
       warnings: cas.warnings,
       stats: { pages, lines: lines.length },
+      viaOcr,
     };
   }
 
   const extracted = extractTransactions(lines, kind);
   const warnings = [...extracted.warnings];
 
-  if (extracted.transactions.length === 0) {
+  // OCR output is demoted wholesale. Tesseract reads dense numeric tables
+  // poorly — 8 against B, 0 against O — and a confident-looking rupee figure
+  // off a scan has not earned that confidence, whatever the parser concluded
+  // from the column or the balance.
+  const transactions = viaOcr
+    ? extracted.transactions.map((t) => ({ ...t, confidence: 'LOW' as const }))
+    : extracted.transactions;
+
+  if (transactions.length === 0) {
     warnings.push(
-      'No transactions were recognised. If this is a scanned statement there is no text to read; download the original from your bank or card portal instead.',
+      viaOcr
+        ? 'Nothing recognisable was read from the scan. OCR struggles with small print and skewed pages — a statement downloaded from the portal will always work better.'
+        : 'No transactions were recognised.',
     );
   }
 
@@ -119,9 +172,108 @@ export async function parseStatement(file: File, password?: string): Promise<Imp
     kind,
     source,
     period,
-    transactions: extracted.transactions,
+    transactions,
     holdings: [],
+    casTransactions: [],
     warnings,
     stats: { pages, lines: lines.length },
+    viaOcr,
   };
+}
+
+/**
+ * Parse a statement into candidates.
+ *
+ * Throws `PasswordRequired` when a PDF is encrypted, which most Indian bank and
+ * card statements are, and `NeedsOcr` when a PDF turns out to be a scan.
+ */
+export async function parseStatement(file: File, password?: string): Promise<ImportResult> {
+  const isPdf = /\.pdf$/i.test(file.name);
+  const isImage = /\.(png|jpe?g|webp|bmp)$/i.test(file.name);
+  const buffer = await readFile(file);
+
+  // A photograph has no text layer by definition; there is nothing to try first.
+  if (isImage) {
+    throw new NeedsOcr(buffer, undefined, 1);
+  }
+
+  if (isPdf) {
+    try {
+      const text = await extractPdfText(buffer, password);
+      return buildResult(text.lines, text.pages, false);
+    } catch (e) {
+      // "No text layer" is not a failure, it is a different route.
+      if (e instanceof Error && e.name === 'PdfUnreadable' && /no text layer/i.test(e.message)) {
+        const { pdfPageCount } = await import('./ocr');
+        const pages = await pdfPageCount(buffer, password).catch(() => 1);
+        throw new NeedsOcr(buffer, password, pages);
+      }
+      throw e;
+    }
+  }
+
+  /*
+    Everything else is identified by its bytes, not its name. Half the ".xls"
+    files Indian bank portals produce are HTML tables rather than spreadsheets
+    — Excel opens them, every real XLSX parser rejects them, and trusting the
+    extension would mean telling the user a perfectly good statement is corrupt.
+  */
+  const bytes = new Uint8Array(buffer);
+  const { sniffFormat, readXlsx, readHtmlTable, gridToLines } = await import('./spreadsheet');
+
+  switch (sniffFormat(bytes)) {
+    case 'XLSX':
+      return buildResult(gridToLines(await readXlsx(bytes)), undefined, false);
+    case 'HTML_TABLE':
+      return buildResult(gridToLines(readHtmlTable(new TextDecoder().decode(bytes))), undefined, false);
+    case 'DELIMITED': {
+      const check = checkImportFile(file, 'csv');
+      if (!check.ok) throw new Error(check.message ?? 'That file cannot be read.');
+      return buildResult(linesFromCsv(new TextDecoder().decode(bytes)), undefined, false);
+    }
+    default:
+      throw new Error(
+        'That file is not a format PaisaTrack can read. The old binary .xls is not supported — re-export as CSV or XLSX, which every bank portal offers.',
+      );
+  }
+}
+
+/**
+ * Read a scan with OCR, after the user has asked for it.
+ *
+ * Separate from `parseStatement` on purpose: this downloads a language model,
+ * spins up a worker and can take a minute, none of which should happen because
+ * someone picked the wrong file.
+ */
+export async function parseViaOcr(
+  needsOcr: NeedsOcr,
+  isImage: boolean,
+  onProgress?: (p: import('./ocr').OcrProgress) => void,
+): Promise<ImportResult> {
+  const { ocrImages, renderPdfToImages } = await import('./ocr');
+
+  let images: Blob[];
+  let pages: number;
+  let truncated = false;
+
+  if (isImage) {
+    images = [new Blob([needsOcr.data])];
+    pages = 1;
+  } else {
+    const rendered = await renderPdfToImages(needsOcr.data, needsOcr.password, onProgress);
+    images = rendered.images;
+    pages = rendered.totalPages;
+    truncated = rendered.truncated;
+  }
+
+  const lines = await ocrImages(images, onProgress);
+  const result = buildResult(lines, pages, true);
+
+  if (truncated) {
+    result.warnings.unshift(
+      `Only the first ${images.length} of ${pages} pages were read. OCR is slow enough that doing the whole document would hang the tab; import these, then split the file to do the rest.`,
+    );
+  }
+
+  return result;
 }

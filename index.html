@@ -17,9 +17,23 @@
       Content Security Policy.
 
       GitHub Pages does not let us set response headers, so the policy is
-      delivered here. connect-src names exactly one external origin:
-      api.github.com. If a change needs another, that is a decision worth
-      arguing for in the commit message, not a quiet edit.
+      delivered here. connect-src names exactly one external origin, and adding
+      a second is a decision worth arguing for in the commit message rather
+      than a quiet edit:
+
+        api.github.com — sync. Data goes OUT, to a private repo you own.
+
+      The OCR engine used to require a second one. Tesseract.js fetches its
+      worker, its WebAssembly core and its language model from a CDN by
+      default, and because the core is loaded with importScripts() inside the
+      worker, that default would have needed `script-src https://cdn.jsdelivr.net`
+      — letting a third party execute script in the origin that holds someone's
+      finances. The engine is served from our own origin instead
+      (scripts/vendor-ocr.mjs), which deletes the origin from the policy rather
+      than widening it, and makes OCR work offline.
+
+      'wasm-unsafe-eval' is in script-src because the OCR engine instantiates
+      WebAssembly. It permits WASM only, not eval() of JavaScript.
 
       frame-ancestors is deliberately absent: browsers ignore it in a <meta>
       element, and GitHub Pages does not let us set response headers, so
@@ -28,7 +42,7 @@
       invisible click could trigger, and no endpoint that trusts an origin.
       Anyone self-hosting behind a proxy should add the header there.
     -->
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' https://api.github.com; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' https://api.github.com; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests" />
     <meta name="referrer" content="strict-origin-when-cross-origin" />
     <meta name="description" content="PaisaTrack — personal finance tracker for India. Salary, credit cards, EMIs, bills, expenses." />
     <meta name="apple-mobile-web-app-capable" content="yes" />

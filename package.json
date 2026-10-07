@@ -14,9 +14,9 @@
     "url": "https://github.com/J5pecter/paisatrack/issues"
   },
   "scripts": {
-    "dev": "vite",
-    "build": "tsc --noEmit && vite build",
-    "build:only": "vite build",
+    "dev": "npm run vendor:ocr && vite",
+    "build": "npm run vendor:ocr && tsc --noEmit && vite build",
+    "build:only": "npm run vendor:ocr && vite build",
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -30,7 +30,8 @@
     "lint": "oxlint",
     "lint:fix": "oxlint --fix",
     "scan:secrets": "node scripts/scan-secrets.mjs",
-    "scan:secrets:history": "node scripts/scan-secrets.mjs --history"
+    "scan:secrets:history": "node scripts/scan-secrets.mjs --history",
+    "vendor:ocr": "node scripts/vendor-ocr.mjs"
   },
   "dependencies": {
     "@octokit/rest": "^22.0.1",
@@ -56,6 +57,7 @@
     "date-fns": "^4.4.0",
     "dexie": "^4.4.6",
     "dexie-react-hooks": "^4.4.0",
+    "fflate": "^0.8.3",
     "html2canvas": "^1.4.1",
     "jspdf": "^4.2.1",
     "papaparse": "^5.7.0",
@@ -65,12 +67,14 @@
     "recharts": "^3.10.1",
     "sonner": "^2.0.8",
     "tailwind-merge": "^3.7.0",
+    "tesseract.js": "^7.0.0",
     "zod": "^4.6.5",
     "zustand": "^5.0.15"
   },
   "devDependencies": {
     "@playwright/test": "^1.63.0",
     "@tailwindcss/vite": "^4.3.3",
+    "@tesseract.js-data/eng": "^1.0.0",
     "@testing-library/jest-dom": "^7.0.1",
     "@testing-library/react": "^16.3.3",
     "@testing-library/user-event": "^14.6.7",

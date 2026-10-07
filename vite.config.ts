@@ -3,6 +3,13 @@ import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import { VitePWA } from 'vite-plugin-pwa';
 import { fileURLToPath, URL } from 'node:url';
+import { createRequire } from 'node:module';
+
+/**
+ * The vendored OCR engine's version, used to name its runtime cache so an
+ * upgrade cannot serve a core and a language model from different releases.
+ */
+const TESSERACT_VERSION: string = createRequire(import.meta.url)('tesseract.js/package.json').version;
 
 // Base path must match the GitHub Pages repo name.
 // deploy.yml sets VITE_BASE_PATH=/<repo-name>/ automatically so this is always correct.
@@ -56,7 +63,18 @@ export default defineConfig({
         // install and does not compete with first paint, so the simple rule —
         // if it shipped, it works offline — is the one worth keeping.
         globPatterns: ['**/*.{css,html,ico,png,svg,woff2,js}'],
-        globIgnores: ['**/vendor-github-*.js'], // sync needs the network anyway
+        globIgnores: [
+          '**/vendor-github-*.js', // sync needs the network anyway
+          /*
+            The OCR engine is 14 MB and most people never touch it. Precaching
+            it would make the very first visit download a WebAssembly core and
+            a language model to support a path the user may never take, on a
+            connection that in India is frequently metered. It is cached at
+            runtime instead — see `runtimeCaching` below — so the second scan
+            works offline and the first one is honest about what it costs.
+          */
+          '**/tesseract/**',
+        ],
         maximumFileSizeToCacheInBytes: 3 * 1024 * 1024,
         navigateFallbackDenylist: [/^\/api\//],
         runtimeCaching: [
@@ -72,6 +90,26 @@ export default defineConfig({
               cacheName: 'github-raw',
               networkTimeoutSeconds: 5,
               expiration: { maxEntries: 20, maxAgeSeconds: 60 * 60 * 24 },
+            },
+          },
+          {
+            /*
+              The OCR engine: downloaded on first use, kept forever after.
+              CacheFirst because these bytes are immutable for a given version
+              — the cache name carries the tesseract.js version, so an upgrade
+              simply starts a new cache rather than serving a core and a
+              language model that disagree.
+
+              This is what makes a second scan work on a train, and it is the
+              reason the engine is worth self-hosting at all: a CDN fetch can
+              never be cached by our own service worker on an opaque response.
+            */
+            urlPattern: ({ url }) => url.origin === self.location.origin && url.pathname.includes('/tesseract/'),
+            handler: 'CacheFirst',
+            options: {
+              cacheName: `ocr-engine-${TESSERACT_VERSION}`,
+              expiration: { maxEntries: 8, maxAgeSeconds: 60 * 60 * 24 * 365 },
+              cacheableResponse: { statuses: [0, 200] },
             },
           },
         ],
