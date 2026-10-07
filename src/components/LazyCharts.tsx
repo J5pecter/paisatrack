@@ -198,4 +198,4 @@ export const UtilizationTrendChart: typeof UtilizationTrendChartType = (props) =
  * charts.tsx would be a static import of Recharts and would defeat everything
  * above it in this file.
  */
-export { CHART_COLOURS, colourFor, Sparkline } from '@/components/chartPalette';
+export { CHART_COLOURS, colourFor } from '@/components/chartPalette';

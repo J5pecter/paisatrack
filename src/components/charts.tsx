@@ -36,7 +36,7 @@ import { CHART_COLOURS, colourFor } from './chartPalette';
 import type { CategorySpend, MonthlyTrendPoint } from '@/lib/finance/dashboard';
 import type { Paise } from '@/types';
 
-export { CHART_COLOURS, colourFor, Sparkline } from './chartPalette';
+export { CHART_COLOURS, colourFor } from './chartPalette';
 
 const AXIS = {
   stroke: 'var(--color-muted-foreground)',

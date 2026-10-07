@@ -1,9 +1,13 @@
 /**
- * Chart palette and the one chart primitive small enough not to need Recharts.
+ * Chart palette.
  *
  * Kept separate from charts.tsx so that LazyCharts can re-export these without
  * statically importing the Recharts bundle — a static re-export would pull all
- * 430 kB back into the initial graph and quietly undo the lazy loading.
+ * 413 kB back into the initial graph and quietly undo the lazy loading.
+ *
+ * This file once also held a `Sparkline`, which is why it is described as the
+ * palette *and* a primitive in older commits. Nothing ever rendered it, so it
+ * was removed; the separation above is still the reason this file exists.
  */
 import { colourIndex } from '@/lib/utils';
 
@@ -29,41 +33,4 @@ export const CHART_COLOURS = [
 /** Stable colour for a label, so a category keeps its colour across charts. */
 export function colourFor(label: string): string {
   return CHART_COLOURS[colourIndex(label, CHART_COLOURS.length)];
-}
-
-/** Tiny inline trend line for stat tiles and table rows. Plain SVG, no library. */
-export function Sparkline({
-  values,
-  colour = CHART_COLOURS[0],
-  width = 72,
-  height = 22,
-}: {
-  values: number[];
-  colour?: string;
-  width?: number;
-  height?: number;
-}) {
-  if (values.length < 2) return <svg width={width} height={height} aria-hidden />;
-
-  const min = Math.min(...values);
-  const max = Math.max(...values);
-  const span = max - min || 1;
-  const step = width / (values.length - 1);
-
-  const points = values
-    .map((v, i) => `${(i * step).toFixed(1)},${(height - ((v - min) / span) * height).toFixed(1)}`)
-    .join(' ');
-
-  return (
-    <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} aria-hidden>
-      <polyline
-        points={points}
-        fill="none"
-        stroke={colour}
-        strokeWidth={1.5}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
 }
