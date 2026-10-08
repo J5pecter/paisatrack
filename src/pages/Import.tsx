@@ -2,9 +2,14 @@
  * Import a statement.
  *
  * Bank, credit card, UPI app or a mutual-fund CAS. The file is read **in this
- * browser** — there is no server to send it to, and nothing leaves the device.
- * For a document carrying someone's salary and account numbers that is not a
- * limitation to apologise for, it is the feature.
+ * browser**, and for a document carrying someone's salary and account numbers
+ * that is not a limitation to apologise for, it is the feature.
+ *
+ * There is exactly one exception, and it is a button rather than a fallback: a
+ * scan the on-device engine cannot read can be sent to a Cloudflare Worker the
+ * user deployed themselves. It is off unless configured, it is never reached
+ * automatically, and the control that triggers it says that it uploads the
+ * statement. Everything else on this screen completes with the network off.
  *
  * The flow is deliberately three steps, not one. Nothing is written until the
  * last: a parser working across a dozen bank layouts will misread rows, and a
@@ -72,9 +77,22 @@ export function Import() {
   const [ocrOffer, setOcrOffer] = React.useState<{ pages: number; isImage: boolean } | null>(null);
   const [progress, setProgress] = React.useState<{ ratio: number; message: string } | null>(null);
   const pendingOcr = React.useRef<unknown>(null);
+  /** A configured Worker with server OCR switched on, or null. */
+  const [serverOcr, setServerOcr] = React.useState<{ url: string; token: string } | null>(null);
   const [rows, setRows] = React.useState<Row[]>([]);
   const [target, setTarget] = React.useState<string>('__none__');
   const fileRef = React.useRef<HTMLInputElement>(null);
+
+  React.useEffect(() => {
+    void (async () => {
+      const { loadWorkerConfig } = await import('@/lib/server/config');
+      const config = await loadWorkerConfig();
+      // Both halves required: a Worker can be configured for reminders only.
+      if (config?.url && config.token && config.ocrEnabled) {
+        setServerOcr({ url: config.url, token: config.token });
+      }
+    })();
+  }, []);
 
   /** Everything already stored, so a re-import of an overlapping period is safe. */
   const existing = React.useMemo(
@@ -158,7 +176,44 @@ export function Import() {
       setStage('PICK');
     } finally {
       setProgress(null);
-      pendingOcr.current = null;
+      // Deliberately NOT cleared. Seeing a mangled result is exactly when
+      // someone wants to try the server, and making them find the file again
+      // to do it would be the kind of small cruelty that stops people
+      // bothering. reset() releases it.
+    }
+  }
+
+  /**
+   * Read the scan on the Worker.
+   *
+   * The only path in this app that uploads a document, which is why it is a
+   * separate function with a separate button rather than a fallback inside
+   * runOcr: there must be no sequence of events where this happens because
+   * something else failed.
+   */
+  async function runServerOcr() {
+    if (!pendingOcr.current || !ocrOffer || !serverOcr) return;
+    setStage('WORKING');
+    setProgress({ ratio: 0, message: 'Starting…' });
+
+    try {
+      const { parseViaServer } = await import('@/lib/import');
+      const parsed = await parseViaServer(
+        pendingOcr.current as never,
+        ocrOffer.isImage,
+        serverOcr,
+        (p) => setProgress(p),
+      );
+      accept(parsed);
+    } catch (e) {
+      setError(
+        e instanceof Error
+          ? e.message
+          : 'The server could not read it. The on-device reader is still available.',
+      );
+      setStage('PICK');
+    } finally {
+      setProgress(null);
     }
   }
 
@@ -270,7 +325,9 @@ export function Import() {
           name={file?.name ?? ''}
           pages={ocrOffer.pages}
           isImage={ocrOffer.isImage}
+          serverAvailable={serverOcr !== null}
           onRun={() => void runOcr()}
+          onRunServer={() => void runServerOcr()}
           onCancel={reset}
         />
       )}
@@ -303,6 +360,9 @@ export function Import() {
           selectedTotal={selectedTotal}
           onCommit={() => void commit()}
           onCancel={reset}
+          onRetryOnServer={
+            serverOcr && pendingOcr.current ? () => void runServerOcr() : undefined
+          }
         />
       )}
     </>
@@ -411,13 +471,18 @@ function OcrOffer({
   name,
   pages,
   isImage,
+  serverAvailable,
   onRun,
+  onRunServer,
   onCancel,
 }: {
   name: string;
   pages: number;
   isImage: boolean;
+  /** True only when a Worker is configured AND the user switched server OCR on. */
+  serverAvailable: boolean;
   onRun: () => void;
+  onRunServer: () => void;
   onCancel: () => void;
 }) {
   return (
@@ -458,8 +523,8 @@ function OcrOffer({
         <div className="space-y-1.5 text-xs text-[var(--color-muted-foreground)]">
           <p>
             <strong className="text-[var(--color-foreground)]">What happens:</strong> the OCR engine
-            and an English language model (about 2 MB) download once from a CDN and are then cached
-            by your browser.
+            and an English language model (about 7 MB) download once from this site and are then
+            kept, so a second scan works offline.
           </p>
           <p>
             <strong className="text-[var(--color-foreground)]">
@@ -482,6 +547,32 @@ function OcrOffer({
             I'll get the original instead
           </Button>
         </div>
+
+        {/*
+          The server option is listed second, visually quieter, and states the
+          upload in its own sentence rather than in a footnote. It is genuinely
+          better at hard scans — a phone photo at an angle, a faded thermal
+          print — and it is the only thing in PaisaTrack that sends a document
+          anywhere. Both of those facts belong on the button, not in a tooltip.
+        */}
+        {serverAvailable && (
+          <div className="space-y-2 rounded-md border border-[var(--color-border)] p-3">
+            <p className="text-xs text-[var(--color-muted-foreground)]">
+              <strong className="text-[var(--color-foreground)]">
+                If that reads it badly, there is a server option.
+              </strong>{' '}
+              Your Worker sends the page to a vision model, which handles angles, creases and faint
+              print far better than the on-device engine.{' '}
+              <strong className="text-[var(--color-warning)]">
+                It uploads this statement to Cloudflare.
+              </strong>{' '}
+              Nothing else in PaisaTrack does that, and it happens only when you press this.
+            </p>
+            <Button variant="outline" size="sm" onClick={onRunServer}>
+              Upload it and read it on the server
+            </Button>
+          </div>
+        )}
       </CardContent>
     </Card>
   );
@@ -558,6 +649,7 @@ function ReviewStep({
   selectedTotal,
   onCommit,
   onCancel,
+  onRetryOnServer,
 }: {
   result: ImportResult;
   rows: Row[];
@@ -570,6 +662,8 @@ function ReviewStep({
   selectedTotal: number;
   onCommit: () => void;
   onCancel: () => void;
+  /** Present only when a Worker is configured with server OCR switched on. */
+  onRetryOnServer?: () => void;
 }) {
   const update = (i: number, patch: Partial<Row>) =>
     setRows((prev) => prev.map((r, j) => (j === i ? { ...r, ...patch } : r)));
@@ -644,13 +738,49 @@ function ReviewStep({
       <Summary result={result} />
 
       {result.viaOcr && (
-        <div className="mt-5 flex items-start gap-2 rounded-md border border-[var(--color-warning)]/40 bg-[var(--color-warning)]/10 p-3 text-xs">
-          <WarningIcon className="mt-0.5 h-4 w-4 shrink-0 text-[var(--color-warning)]" weight="fill" />
-          <p>
-            <strong>These were read by OCR from a scan.</strong> Check every figure against the
-            document before importing — nothing is pre-selected, because a misread digit in a rupee
-            amount is not a rounding error.
+        <div className="mt-5 space-y-2 rounded-md border border-[var(--color-warning)]/40 bg-[var(--color-warning)]/10 p-3 text-xs">
+          <p className="flex items-start gap-2">
+            <WarningIcon
+              className="mt-0.5 h-4 w-4 shrink-0 text-[var(--color-warning)]"
+              weight="fill"
+            />
+            <span>
+              <strong>
+                {result.ocrSource === 'SERVER'
+                  ? 'These were read by a vision model on your server.'
+                  : 'These were read by OCR from a scan.'}
+              </strong>{' '}
+              Check every figure against the document before importing — nothing is pre-selected,
+              because a misread digit in a rupee amount is not a rounding error.
+              {result.ocrSource === 'SERVER' && (
+                <>
+                  {' '}
+                  A model can also produce a figure that looks entirely plausible and is simply
+                  wrong, which is harder to spot than a garbled one. Rows whose amount disagrees with
+                  the running balance beside it have already been flagged.
+                </>
+              )}
+            </span>
           </p>
+
+          {/*
+            Escalation, offered at the only moment it is useful: the user is
+            looking at what the on-device engine made of their statement and
+            can see whether it is worth uploading. Offering this before they
+            had seen the local attempt would push a privacy decision they had
+            no information for.
+          */}
+          {result.ocrSource === 'LOCAL' && onRetryOnServer && (
+            <p className="flex flex-wrap items-center gap-2 pl-6">
+              <span className="text-[var(--color-muted-foreground)]">
+                Badly read? Your server handles angled and faded scans better —{' '}
+                <strong className="text-[var(--color-warning)]">it uploads this statement.</strong>
+              </span>
+              <Button variant="outline" size="sm" onClick={onRetryOnServer}>
+                Read it on the server instead
+              </Button>
+            </p>
+          )}
         </div>
       )}
 

@@ -37,6 +37,7 @@ import {
 } from '@/components/icons';
 import { PageHeader } from '@/components/layout/AppShell';
 import { InstallCard } from '@/components/InstallPrompt';
+import { ServerCard } from '@/components/ServerCard';
 import { CopyButton, LastUpdated } from '@/components/Chrome';
 import { db } from '@/lib/db/schema';
 import { bulkPut, getDeviceId } from '@/lib/db/repository';
@@ -149,6 +150,8 @@ export function Settings() {
 
       <div className="grid gap-5 lg:grid-cols-2">
         <GitHubSyncCard syncState={syncState} />
+
+        <ServerCard />
 
         <div className="space-y-5">
           <Card>

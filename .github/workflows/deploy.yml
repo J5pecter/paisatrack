@@ -45,6 +45,14 @@ jobs:
         run: npm run build:only
         env:
           VITE_BASE_PATH: /${{ github.event.repository.name }}/
+          # Origin of the optional Cloudflare Worker, compiled into the CSP's
+          # connect-src. Empty unless the repository variable is set, in which
+          # case the app ships permitting no server at all — which is the
+          # default and the correct one for anybody who has not deployed the
+          # Worker in worker/.
+          #
+          #   gh variable set VITE_WORKER_ORIGIN --body "https://paisatrack.you.workers.dev"
+          VITE_WORKER_ORIGIN: ${{ vars.VITE_WORKER_ORIGIN }}
 
       - name: SPA fallback
         # Pages has no rewrite rules, so a deep link like /cards would 404.

@@ -17,11 +17,28 @@
       Content Security Policy.
 
       GitHub Pages does not let us set response headers, so the policy is
-      delivered here. connect-src names exactly one external origin, and adding
-      a second is a decision worth arguing for in the commit message rather
-      than a quiet edit:
+      delivered here. connect-src names one fixed external origin plus one
+      optional build-time one, and adding anything else is a decision worth
+      arguing for in the commit message rather than a quiet edit:
 
-        api.github.com — sync. Data goes OUT, to a private repo you own.
+        api.github.com   — sync. Data goes OUT, to a private repo you own.
+
+        (one more)       — substituted into connect-src at build time from the
+                           VITE_WORKER_ORIGIN environment variable, and EMPTY
+                           unless someone deliberately set it. It is the
+                           optional Cloudflare Worker: server-side OCR for a
+                           scan the on-device engine cannot read, and push
+                           reminders for due dates. Both are opt-in, and the
+                           app is fully functional with neither. One named
+                           origin rather than `https://*.workers.dev`, which
+                           would have let this page talk to every Worker
+                           anybody has ever deployed.
+
+                           The placeholder token appears exactly once in this
+                           file, in the policy below, and the build asserts
+                           that. Writing it here a second time to illustrate
+                           it would consume the substitution — which is a
+                           mistake already made once.
 
       The OCR engine used to require a second one. Tesseract.js fetches its
       worker, its WebAssembly core and its language model from a CDN by
@@ -42,7 +59,7 @@
       invisible click could trigger, and no endpoint that trusts an origin.
       Anyone self-hosting behind a proxy should add the header there.
     -->
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' https://api.github.com; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' https://api.github.com %WORKER_ORIGIN%; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests" />
     <meta name="referrer" content="strict-origin-when-cross-origin" />
     <meta name="description" content="PaisaTrack — personal finance tracker for India. Salary, credit cards, EMIs, bills, expenses." />
     <meta name="apple-mobile-web-app-capable" content="yes" />

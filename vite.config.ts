@@ -11,8 +11,47 @@ import { createRequire } from 'node:module';
  */
 const TESSERACT_VERSION: string = createRequire(import.meta.url)('tesseract.js/package.json').version;
 
+/**
+ * The optional Cloudflare Worker's origin, baked into the CSP at build time.
+ *
+ * It has to be a build-time value rather than a setting, because CSP is a
+ * static `<meta>` on a site with no control over response headers — the browser
+ * decides what the page may talk to before any of our code runs.
+ *
+ * The alternative was allowing `https://*.workers.dev`, which would have meant
+ * every page on this origin could reach every Worker anyone has ever deployed.
+ * Naming one origin keeps the policy as tight as it was before the Worker
+ * existed. The cost is a rebuild to change it, which is a deploy either way.
+ *
+ * Unset is the normal case: the app ships with no server, the CSP gains
+ * nothing, and the Settings screen says the Worker is not permitted by this
+ * build rather than letting the browser fail with an unexplained network error.
+ *
+ *   VITE_WORKER_ORIGIN=https://paisatrack.you.workers.dev npm run build
+ */
+const WORKER_ORIGIN: string = (() => {
+  const raw = process.env.VITE_WORKER_ORIGIN?.trim();
+  if (!raw) return '';
+  try {
+    const { origin, protocol } = new URL(raw);
+    // An http: Worker would silently downgrade everything the page sends it,
+    // and `upgrade-insecure-requests` would rewrite it anyway.
+    if (protocol !== 'https:') {
+      throw new Error(`VITE_WORKER_ORIGIN must be https. Got: ${raw}`);
+    }
+    return origin;
+  } catch (e) {
+    // Failing the build beats shipping a CSP with a mangled source in it,
+    // which browsers handle by ignoring the whole directive.
+    throw new Error(`VITE_WORKER_ORIGIN is not a valid URL: ${raw} (${(e as Error).message})`);
+  }
+})();
+
 // Base path must match the GitHub Pages repo name.
 // deploy.yml sets VITE_BASE_PATH=/<repo-name>/ automatically so this is always correct.
+/** Placeholder substituted into the CSP's connect-src. Must appear once in index.html. */
+const MARKER = '%WORKER_ORIGIN%';
+
 const base = process.env.VITE_BASE_PATH ?? '/paisatrack/';
 
 /**
@@ -28,7 +67,46 @@ export default defineConfig({
   resolve: {
     alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
   },
+  define: {
+    // Read by src/lib/server/config.ts so the Settings screen can tell the user
+    // whether the origin they typed is the one this build's CSP permits.
+    'import.meta.env.VITE_WORKER_ORIGIN': JSON.stringify(WORKER_ORIGIN),
+  },
   plugins: [
+    {
+      /*
+        Substitute the Worker origin into the CSP.
+
+        A marker rather than a regex over the policy: a replacement that
+        silently matched nothing would ship a page that cannot reach the
+        Worker, and the failure would surface as a browser console message
+        nobody reads. If the marker is missing, this throws.
+      */
+      name: 'paisatrack-csp-worker-origin',
+      enforce: 'pre' as const,
+      transformIndexHtml(html: string) {
+        /*
+          Exactly one, asserted.
+
+          `String.replace` with a string pattern substitutes only the FIRST
+          match. The token used to appear twice — once in the comment above the
+          policy, explaining itself, and once in the policy — so the comment
+          absorbed the substitution and the real directive shipped with a
+          literal `%WORKER_ORIGIN%` in it. Browsers respond to an unparseable
+          source by dropping it, which fails silently and at runtime.
+
+          Counting is the cheap fix. Zero means someone removed the marker;
+          more than one means a second copy is about to eat the replacement.
+        */
+        const occurrences = html.split(MARKER).length - 1;
+        if (occurrences !== 1) {
+          throw new Error(
+            `index.html must contain ${MARKER} exactly once in its CSP; found ${occurrences}.`,
+          );
+        }
+        return html.replace(MARKER, WORKER_ORIGIN);
+      },
+    },
     react(),
     tailwindcss(),
     VitePWA({
@@ -51,6 +129,13 @@ export default defineConfig({
         ],
       },
       workbox: {
+        /*
+          Push and notification-click handling, which Workbox's generated
+          service worker has no notion of. `importScripts` is the supported
+          seam in generateSW mode; owning the whole service worker instead
+          would mean hand-maintaining the precache registration below.
+        */
+        importScripts: ['push-sw.js'],
         // Precache everything the build emits, so the whole app — every page,
         // every chart, CSV import and PDF export — works offline from the first
         // visit. That is a stated requirement, and the alternative is a user

@@ -6,10 +6,15 @@
  * A misread row in someone's finances is worse than no row, and a parser
  * working across a dozen bank layouts will misread some of them.
  *
- * Everything runs in the browser. There is no server to upload a statement to,
- * and every hosted OCR service wants a card — which the product forbids. For a
- * document containing someone's salary and account numbers, staying local is
- * the right answer regardless.
+ * Everything here runs in the browser by default, and every path in this file
+ * except one completes without a network connection at all.
+ *
+ * The exception is `parseViaServer`, and it is reached only by pressing a
+ * button that says what it does. A scan that the on-device engine cannot read
+ * is the one case where the alternative is typing forty rows by hand, so the
+ * escape hatch exists — but it uploads the statement, and nothing else in
+ * PaisaTrack does. It is never the default, never automatic, and never
+ * silent.
  */
 import Papa from 'papaparse';
 import { checkImportFile, MAX_IMPORT_BYTES } from '@/lib/validation';
@@ -45,6 +50,14 @@ export interface ImportResult {
   stats: { pages?: number; lines: number };
   /** True when the rows came from OCR and are therefore all suspect. */
   viaOcr: boolean;
+  /**
+   * Which engine read it, when `viaOcr`.
+   *
+   * Worth distinguishing in the UI rather than collapsing into "OCR": one of
+   * these ran on the device and one uploaded the statement to a server. The
+   * user chose the second deliberately and should be told it happened.
+   */
+  ocrSource?: 'LOCAL' | 'SERVER';
 }
 
 /**
@@ -98,7 +111,12 @@ function linesFromCsv(text: string): string[] {
  * detection, extraction and category rules — the only difference being that
  * OCR output is never trusted.
  */
-function buildResult(lines: string[], pages: number | undefined, viaOcr: boolean): ImportResult {
+function buildResult(
+  lines: string[],
+  pages: number | undefined,
+  viaOcr: boolean,
+  ocrSource?: 'LOCAL' | 'SERVER',
+): ImportResult {
   const { kind, source } = detectStatement(lines);
   const period = detectPeriod(lines);
 
@@ -146,6 +164,7 @@ function buildResult(lines: string[], pages: number | undefined, viaOcr: boolean
       warnings: cas.warnings,
       stats: { pages, lines: lines.length },
       viaOcr,
+      ocrSource,
     };
   }
 
@@ -178,6 +197,7 @@ function buildResult(lines: string[], pages: number | undefined, viaOcr: boolean
     warnings,
     stats: { pages, lines: lines.length },
     viaOcr,
+    ocrSource,
   };
 }
 
@@ -267,12 +287,76 @@ export async function parseViaOcr(
   }
 
   const lines = await ocrImages(images, onProgress);
-  const result = buildResult(lines, pages, true);
+  const result = buildResult(lines, pages, true, 'LOCAL');
 
   if (truncated) {
     result.warnings.unshift(
       `Only the first ${images.length} of ${pages} pages were read. OCR is slow enough that doing the whole document would hang the tab; import these, then split the file to do the rest.`,
     );
+  }
+
+  return result;
+}
+
+/**
+ * Read a scan with the Cloudflare Worker, after the user has asked for it.
+ *
+ * Separate from `parseViaOcr` for the reason that matters: **this uploads the
+ * statement.** Tesseract is slow and sometimes wrong, but the document never
+ * leaves the device; this is faster and usually better and sends a page
+ * containing someone's salary and account number to a third party. That is a
+ * trade only the user can make, so it lives behind its own explicit action and
+ * its own warning.
+ *
+ * The Worker returns a transcription, not an interpretation. It goes through
+ * the same `buildResult` as every other path, which means the running-balance
+ * check runs over it unchanged — and that check is what catches a model
+ * inventing a figure, because an invented amount does not reconcile with the
+ * balance printed next to it.
+ */
+export async function parseViaServer(
+  needsOcr: NeedsOcr,
+  isImage: boolean,
+  call: import('@/lib/server/config').WorkerCall,
+  onProgress?: (p: import('./ocr').OcrProgress) => void,
+  signal?: AbortSignal,
+): Promise<ImportResult> {
+  const { readViaServer } = await import('./serverOcr');
+
+  let images: Blob[];
+  let pages: number;
+  let truncated = false;
+
+  if (isImage) {
+    images = [new Blob([needsOcr.data])];
+    pages = 1;
+  } else {
+    // Rendering is the same work either way — a vision model needs a bitmap
+    // just as Tesseract does. The page cap applies here too, and matters more:
+    // each page spends part of a daily neuron allowance.
+    const { renderPdfToImages } = await import('./ocr');
+    const rendered = await renderPdfToImages(needsOcr.data, needsOcr.password, (p) =>
+      onProgress?.({ ratio: p.ratio * 0.3, message: p.message }),
+    );
+    images = rendered.images;
+    pages = rendered.totalPages;
+    truncated = rendered.truncated;
+  }
+
+  const response = await readViaServer(call, images, onProgress, signal);
+  const result = buildResult(response.lines, pages, true, 'SERVER');
+
+  if (truncated) {
+    result.warnings.unshift(
+      `Only the first ${images.length} of ${pages} pages were read. Import these, then split the file to do the rest.`,
+    );
+  }
+
+  // A page the model refused or failed on is a silent hole in the middle of a
+  // statement otherwise, which is exactly the kind of gap someone reconciles
+  // against their bank and cannot explain.
+  for (const failure of response.failures ?? []) {
+    result.warnings.unshift(`${failure} — that page contributed no rows.`);
   }
 
   return result;

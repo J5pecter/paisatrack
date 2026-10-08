@@ -23,6 +23,11 @@ jobs:
 
       - run: npm ci
 
+      # The Worker is a separate npm project with its own toolchain, so that
+      # importing it cannot drag Cloudflare's global types into the app's.
+      - name: Install Worker dependencies
+        run: npm ci --prefix worker
+
       - name: Scan for secrets
         run: npm run scan:secrets
 
@@ -32,8 +37,14 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
+      - name: Typecheck the Worker
+        run: npm run typecheck:worker
+
       - name: Unit tests
         run: npm run test
+
+      - name: Worker tests
+        run: npm run test:worker
 
       - name: Build
         run: npm run build:only

@@ -104,13 +104,14 @@ bank credentials.
 | F18 | **Cash and bank** — confirmed balances, spending attributed per account, recount with drift | Net worth counts liquid assets; the gap between expected and counted is named rather than absorbed |
 | F20 | **Statement import** — bank, card, UPI app and mutual-fund CAS, from PDF, XLSX, a bank portal’s HTML-masquerading-as-`.xls`, or CSV | Read in the browser; every row reviewed before anything is written; re-importing an overlapping period is safe |
 | F21 | **Scanned statements** — OCR for a photograph or a scan with no text layer | Offered, never automatic; the engine is served from our own origin, so it works offline and needs no third-party script; every row it produces is marked unverified and nothing is pre-selected |
+| F22 | **Optional Cloudflare Worker** — self-deployed, free plan, no card | Two opt-in additions and a hard dependency on neither: a vision model for a scan the device cannot read, and push reminders for due payments. The app is fully functional with the Worker absent, unconfigured or offline |
 | F19 | **Install to home screen** — real prompt on Android/Chrome, Share-sheet instructions on iOS | Opens full-screen and offline; the prompt is dismissible and never returns, but Settings keeps the option |
 
 ### 5.2 Explicitly deferred
 
 | Feature | Why | Would need |
 | --- | --- | --- |
-| Push notifications | No server for VAPID keys | A server, or a paid push service |
+| ~~Push notifications~~ | Shipped as F22. A Cloudflare Worker on the free plan signs the VAPID JWT and a cron trigger fires the sweep — no card, and no payload, so only dates leave the device | — |
 | Bank feeds | Not free, needs a TSP licence | Account aggregator integration |
 | Multi-currency | Out of scope for the target user | FX rates, a rate source |
 | Shared/family accounts | Single-user by design | Auth, a server, permissions |
@@ -130,6 +131,18 @@ The product is working if:
    user has explicitly configured sync. Statements — including scanned ones,
    which are read by an OCR engine served from our own origin — are parsed in
    the browser and never uploaded.
+
+   Two deliberate exceptions exist, both off by default, both requiring a
+   Worker the user deployed themselves (F22):
+
+   - **Server OCR** uploads one statement, when the user presses a button that
+     says it uploads one statement. The Worker stores nothing.
+   - **Reminders** upload a list of **dates**. No amounts, no payees, no
+     account names, and the push itself carries no payload — so the server can
+     learn that something is due on the 18th and never what.
+
+   With the Worker unconfigured, which is the default, criterion 5 holds
+   unchanged.
 
 ## 7. Constraints and risks
 

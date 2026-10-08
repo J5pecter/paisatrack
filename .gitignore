@@ -44,3 +44,10 @@ lighthouse-report.report.*
 # scripts/vendor-ocr.mjs on every build. npm pins the versions; git should not
 # carry the bytes.
 public/tesseract/
+
+# The Worker is its own npm project.
+worker/node_modules/
+worker/.wrangler/
+
+# wrangler dev secrets, local only
+worker/.dev.vars

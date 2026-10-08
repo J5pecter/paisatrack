@@ -204,8 +204,20 @@ query by string concatenation if a query language is ever introduced.
 ### 4.6 Headers
 
 GitHub Pages controls response headers, so CSP is delivered via `<meta>` in
-`index.html`. It is restrictive: `connect-src` allows only `api.github.com`.
-Any change that needs a new origin must say why in the commit message.
+`index.html`. It is restrictive: `connect-src` allows `api.github.com` and, if
+and only if the build was given one, a single Cloudflare Worker origin. Any
+change that needs a new origin must say why in the commit message.
+
+**The Worker origin is a build-time value, not a setting.** CSP is decided
+before any of our code runs, so a URL typed into Settings cannot widen it.
+`VITE_WORKER_ORIGIN` is substituted into the policy by a Vite plugin that
+asserts the placeholder appears exactly once — it once appeared twice, the
+explanatory comment absorbed the substitution, and the real directive shipped
+with a literal `%WORKER_ORIGIN%` that browsers silently dropped.
+
+Naming one origin was chosen over `https://*.workers.dev`, which would have let
+this page reach every Worker anyone has ever deployed. Unset is the default and
+means the build permits no server at all.
 
 `script-src` carries `'wasm-unsafe-eval'`, which permits WebAssembly
 instantiation and nothing else — not `eval()` of JavaScript. The OCR engine
@@ -254,6 +266,18 @@ npm run build && npx vite preview --port 4180 --strictPort
 
 Exceeding a budget is not forbidden — it needs a line here saying what was
 bought with it.
+
+**On re-measuring.** Lighthouse's TBT is badly unstable on a machine that is
+also running builds and tests — it has been observed swinging between 110ms and
+700ms on the *same* bundle, which moves the performance score by fifteen points.
+When a change needs to be shown not to have cost anything, measure the
+preloaded set instead: the chunks `index.html` actually references are
+deterministic, and at the time of writing they total **839.6 kB uncompressed**
+(`react` 435, `AppShell` 215, `db` 102, `money` 62, the rest small). If a change
+has not moved that list, it has not moved the critical path, whatever a noisy
+Lighthouse run says. Re-measure the score on an otherwise idle machine, and
+interleave runs against the previous build rather than comparing to a number
+recorded on a different day.
 
 **Precache, 2.96 MB against a 1.5 MB budget.** Bought: every page, every chart,
 CSV import and PDF export all work offline from the first visit, which is a

@@ -103,10 +103,15 @@ PaisaTrack/
 ├── tests/                     Vitest unit specs
 ├── scripts/
 │   ├── gen-icons.mjs          PWA icons generated from scratch, no deps
+│   ├── gen-vapid.mjs          Web-push keypair, run once
 │   ├── vendor-ocr.mjs         Copies the OCR engine out of node_modules
 │   └── fetch-rates.mjs        Monthly MCLR refresh, fails quietly
 ├── public/                    Icons, favicon
+│   ├── push-sw.js             Push handlers, imported into the generated SW
 │   └── tesseract/             Vendored OCR engine (gitignored, built)
+├── worker/                    OPTIONAL Cloudflare Worker — its own npm project
+│   ├── src/index.ts             /ocr, /push/*, daily cron
+│   └── README.md                Deploy guide, quotas, what the server learns
 ├── .github/workflows/         deploy · ci · refresh-rates
 └── src/
     ├── lib/
@@ -183,6 +188,7 @@ run in seven seconds.
 | PDF reading | pdf.js, lazy | Extraction, not OCR — portal statements have a real text layer. Loaded only when a PDF is picked. |
 | Spreadsheets | fflate + DOMParser | Hand-rolled XLSX reader. npm `xlsx` 0.18.5 carries an unpatched prototype-pollution CVE; fflate was already a dependency. |
 | OCR | tesseract.js, self-hosted | Scans only, offered not automatic. Served from our own origin — the CDN default would have needed `script-src` for a third party. See Rules §4.6. |
+| Optional server | Cloudflare Workers, free plan | The only two jobs the device cannot do: a vision model for an unreadable scan, and a push while the app is closed. No card. Absent by default. |
 | Money | big.js | Never float. See Rules. |
 | Validation | Zod | Everything crossing the trust boundary. |
 | PWA | vite-plugin-pwa / Workbox | Precache everything the build emits, so the whole app works offline from the first visit. |
@@ -314,13 +320,72 @@ date + amount + normalised description, and anything already stored arrives
 pre-unticked rather than silently dropped, so the user can see what was
 skipped.
 
-## 9. What this architecture cannot do
+## 9. The optional server
+
+PaisaTrack has no server. It has an *optional* one, which is a different thing:
+a Cloudflare Worker the user deploys to their own account, for the two jobs a
+local-first app genuinely cannot do, and which the app is fully functional
+without.
+
+```
+  Settings ──▶ URL + token in _settings (IndexedDB)
+                     │
+     ┌───────────────┴───────────────┐
+     │                               │
+  OCR (opt-in)                  Reminders (opt-in)
+     │                               │
+  one statement,                 a list of DATES
+  on one button press            no amounts, no payees
+     │                               │
+     ▼                               ▼
+  POST /ocr ──▶ vision model    POST /push/subscribe ──▶ KV
+  transcription back                   │
+     │                            daily cron ──▶ bodiless push
+     ▼                                              │
+  the SAME parser that reads             SW shows a generic line;
+  a text-layer PDF, balance              the app fills in the detail
+  check and all                          from the local database
+```
+
+**Why it fits on the free plan.** Workers Free allows **10ms of CPU** per
+request — a budget for time spent executing, not a speed limit that can be
+traded for patience. Running Tesseract there is impossible at any speed. So
+every path is I/O-bound by construction: the browser base64-encodes the image
+before upload (touching a megabyte server-side would blow the budget alone),
+inference happens on Cloudflare's GPUs through a binding, and a push is one
+ECDSA signature plus a POST.
+
+**Why the model only transcribes.** A vision model asked for structured
+transactions returns well-formed JSON containing invented figures — a worse
+failure than Tesseract's, because a plausible wrong number survives a glance
+and a garbled one does not. So the Worker's prompt asks only for a
+transcription, and the text goes through `buildResult` exactly like every other
+source. That means the running-balance check runs over it unchanged, and it
+does not care whether a human, Tesseract or an LLM produced the number: an
+invented amount fails to reconcile with the balance printed beside it and gets
+flagged.
+
+**Why the push is empty.** A payload would have to be encrypted by the sender,
+and to encrypt it the Worker would first have to *hold* it — the amount, the
+payee, the account. A bodiless push is a legal push: it wakes the service
+worker, which shows "a payment is due", and the app supplies the detail
+locally after the tap. Sending nothing is both simpler than and strictly more
+private than sending something encrypted.
+
+**Why it is a separate npm project.** Importing `worker/src` into the app's
+TypeScript program would pull `@cloudflare/workers-types` globals — `Ai`,
+`KVNamespace`, a different `fetch` — into the type space of a browser app that
+is not a Worker. It has its own tsconfig, its own vitest, and its own CI steps.
+
+## 10. What this architecture cannot do
 
 Stated plainly, because a reader will otherwise ask:
 
 - **No server-side anything** — no server-side validation, no server-side
   permission checks, no inbound rate limiting, no server-side caching, no load
-  balancer, no connection pooling. There is no server.
+  balancer, no connection pooling. The optional Worker (§9) does not change
+  this: it holds no user data, has no notion of an account, and every figure
+  the app reports is computed on the device whether it is deployed or not.
 - **No authentication.** The device is the trust boundary. Anyone with the
   unlocked device has the data, exactly as with a notes app.
 - **No multi-user isolation**, because there is one user.

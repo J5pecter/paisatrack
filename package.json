@@ -26,12 +26,14 @@
     "refresh-rates": "node scripts/fetch-rates.mjs",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
-    "test:all": "npm run scan:secrets && npm run lint && npm run typecheck && npm run test && npm run test:e2e",
+    "test:all": "npm run scan:secrets && npm run lint && npm run typecheck && npm run typecheck:worker && npm run test && npm run test:worker && npm run test:e2e",
     "lint": "oxlint",
     "lint:fix": "oxlint --fix",
     "scan:secrets": "node scripts/scan-secrets.mjs",
     "scan:secrets:history": "node scripts/scan-secrets.mjs --history",
-    "vendor:ocr": "node scripts/vendor-ocr.mjs"
+    "vendor:ocr": "node scripts/vendor-ocr.mjs",
+    "test:worker": "npm --prefix worker test",
+    "typecheck:worker": "npm --prefix worker run typecheck"
   },
   "dependencies": {
     "@octokit/rest": "^22.0.1",
