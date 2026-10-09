@@ -23,7 +23,9 @@ const ACRONYMS = new Set([
  *   EMERGENCY_FUND -> "Emergency fund"
  */
 export function humanise(value: string): string {
-  const words = value.split('_');
+  // Split on underscores AND camelCase humps, so both `CREDIT_CARD` and the
+  // table name `creditCards` read as "Credit cards" rather than "Creditcards".
+  const words = value.replace(/([a-z0-9])([A-Z])/g, '$1_$2').split('_');
   return words
     .map((word, i) => {
       const upper = word.toUpperCase();

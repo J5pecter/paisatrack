@@ -16,6 +16,13 @@ binding = "AI"
 binding = "PUSH"
 id = "REPLACE_WITH_YOUR_KV_NAMESPACE_ID"
 
+# The records themselves. Free tier: 5 GB, 5M row reads/day, 100k row
+# writes/day — against which one person's finances are a rounding error.
+[[d1_databases]]
+binding = "DB"
+database_name = "paisatrack"
+database_id = "REPLACE_WITH_YOUR_D1_DATABASE_ID"
+
 [vars]
 # Add your own origin here if you fork and deploy to a different Pages site.
 # The first entry is the fallback used when a request arrives with no Origin.

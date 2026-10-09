@@ -34,7 +34,7 @@ export class ErrorBoundary extends React.Component<{ children: React.ReactNode }
           </div>
           <h1 className="text-xl font-semibold">Something broke</h1>
           <p className="mt-2 text-sm text-[var(--color-muted-foreground)]">
-            Your data is safe — it lives in this browser and, if sync is on, in your GitHub repo.
+            Your data is safe — it lives on your server, not in this page.
             Reloading usually clears this.
           </p>
           <pre className="mt-4 max-h-40 overflow-auto rounded-md bg-[var(--color-muted)] p-3 text-left text-xs">

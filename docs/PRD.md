@@ -96,18 +96,25 @@ bank credentials.
 | F10 | **Budgets** — per-category limits, safe-to-spend | Over-budget flagged; safe-to-spend ignores overspends |
 | F11 | **Investments and goals** — holdings, allocation, monthly-needed | Gains computed against invested principal |
 | F12 | **Reports** — monthly and FY, CSV and PDF | PDF renders locally, nothing uploaded |
-| F13 | **GitHub sync** — optional, last-write-wins, tombstoned deletes | Two devices converge on the same state |
-| F14 | **PWA** — offline, installable | Whole app works with the network off |
+| F13 | **Hosted data** — every record in a Cloudflare D1 database in the user's own account | Any device with the URL and token sees the same data, with no merge step because there is one copy |
+| F14 | **PWA** — installable to the home screen | Opens full-screen like an app. No longer works offline: see §5.2 |
 | F15 | **Command palette** — Ctrl/⌘K, N to add | Jumps to any page, searches expenses |
 | F16 | **Help** — where the data lives, what sync costs, why interest was charged | Worked examples are computed by the engine at render, so the page cannot quote a stale figure |
 | F17 | **Mobile secondary navigation** — four tabs plus a "More" sheet | Every page is reachable on a phone without a keyboard |
 | F18 | **Cash and bank** — confirmed balances, spending attributed per account, recount with drift | Net worth counts liquid assets; the gap between expected and counted is named rather than absorbed |
 | F20 | **Statement import** — bank, card, UPI app and mutual-fund CAS, from PDF, XLSX, a bank portal’s HTML-masquerading-as-`.xls`, or CSV | Read in the browser; every row reviewed before anything is written; re-importing an overlapping period is safe |
 | F21 | **Scanned statements** — OCR for a photograph or a scan with no text layer | Offered, never automatic; the engine is served from our own origin, so it works offline and needs no third-party script; every row it produces is marked unverified and nothing is pre-selected |
-| F22 | **Optional Cloudflare Worker** — self-deployed, free plan, no card | Two opt-in additions and a hard dependency on neither: a vision model for a scan the device cannot read, and push reminders for due payments. The app is fully functional with the Worker absent, unconfigured or offline |
+| F22 | **Cloudflare Worker** — self-deployed, free plan, no card | Holds the data (F13), and adds two separately opt-in extras: a vision model for a scan the device cannot read, and push reminders for due payments |
 | F19 | **Install to home screen** — real prompt on Android/Chrome, Share-sheet instructions on iOS | Opens full-screen and offline; the prompt is dismissible and never returns, but Settings keeps the option |
 
-### 5.2 Explicitly deferred
+### 5.2 Given up, deliberately
+
+| What | Why |
+| --- | --- |
+| **Offline use** | The records live on the server and nothing is cached on the device, so with no connection there is nothing to show. Bought: one copy of the truth, reachable from any device, with no merge step and no "which version is real?". The old design had a complete answer to offline and a worse answer to everything else — two devices held different data and neither was complete. |
+| **Local-first** | The same trade stated the other way. PaisaTrack was local-first with optional GitHub sync until October 2026. The sync engine — last-write-wins, tombstones, a deviceId tiebreaker — existed entirely to reconcile devices that had both edited offline, and all of it was deleted along with the premise. |
+
+### 5.3 Explicitly deferred
 
 | Feature | Why | Would need |
 | --- | --- | --- |
@@ -125,15 +132,14 @@ The product is working if:
    Tested end-to-end, not by eye.
 2. **The finance engine matches published figures.** Bank EMI calculators, HDFC's
    worked interest example, the FY 2025-26 slab boundaries.
-3. **It works with the network off**, including the first visit after install.
+3. **It is honest about needing the network.** The app never renders a figure it has not fetched — a net worth of ₹0 is a claim, and a loading state must not be mistakable for a wiped database.
 4. **It costs ₹0** and never asks for a card.
-5. **Nothing leaves the device** except to `api.github.com`, and only when the
-   user has explicitly configured sync. Statements — including scanned ones,
-   which are read by an OCR engine served from our own origin — are parsed in
-   the browser and never uploaded.
+5. **Nothing goes anywhere the user did not put it.** The records go to a
+   Cloudflare Worker in the user's own account, reachable only with a token
+   they generated. There is no PaisaTrack server, no shared database and no
+   account system. Statements are still parsed in the browser.
 
-   Two deliberate exceptions exist, both off by default, both requiring a
-   Worker the user deployed themselves (F22):
+   Two further things leave the device, both off by default:
 
    - **Server OCR** uploads one statement, when the user presses a button that
      says it uploads one statement. The Worker stores nothing.
@@ -141,8 +147,10 @@ The product is working if:
      account names, and the push itself carries no payload — so the server can
      learn that something is due on the 18th and never what.
 
-   With the Worker unconfigured, which is the default, criterion 5 holds
-   unchanged.
+   Neither happens unless switched on. The records themselves are not optional
+   — that is what F13 changed, and it is the one place this criterion is weaker
+   than it was: the data is reachable by anyone holding the token, from
+   anywhere, rather than only by someone holding the unlocked device.
 
 ## 7. Constraints and risks
 

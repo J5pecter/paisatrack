@@ -7,16 +7,45 @@
  */
 import { expect, test, type Page } from '@playwright/test';
 
+/** Matches e2e/server.mjs, which Playwright starts alongside the preview. */
+const SERVER = 'http://localhost:8788';
+
 /**
  * Start every test from an empty database.
  *
- * Playwright gives each test its own browser context, so IndexedDB and
- * localStorage are already empty — asserting on the welcome screen is enough.
- * Explicitly deleting the database here would be worse than useless: the delete
- * blocks while the app holds the connection open, then fires after the reload
- * and wipes data the test has just written.
+ * The app keeps no local copy any more, so "empty" means an empty dataset on
+ * the server rather than an empty IndexedDB. Each test gets a unique token and
+ * the test server treats a token as a namespace, so parallel tests cannot see
+ * each other's records — and no wipe is needed, because a fresh token has never
+ * had any.
+ *
+ * `addInitScript` runs before the page's own scripts, so the config is in
+ * localStorage by the time BootGate reads it and the app loads straight into
+ * the welcome screen rather than the setup one.
  */
+let namespaceCounter = 0;
+
 async function freshApp(page: Page) {
+  /*
+    A namespace, not a credential — the test server treats whatever it is given
+    as a bucket key and authenticates nothing. The real Worker's token handling
+    is covered by worker/src/index.test.ts.
+  */
+  const namespace = `e2e_${Date.now().toString(36)}_${namespaceCounter++}_${Math.random().toString(36).slice(2, 8)}`;
+
+  await page.addInitScript(
+    ([url, tok]) => {
+      localStorage.setItem(
+        'paisatrack.worker',
+        JSON.stringify({ url, token: tok, ocrEnabled: false, remindersEnabled: false, leadDays: 3 }),
+      );
+      // There is no old IndexedDB in a fresh context, but saying so explicitly
+      // keeps the migration screen out of every test's way.
+      localStorage.setItem('paisatrack.migrationHandled', 'yes');
+    },
+    [SERVER, namespace] as const,
+  );
+
   await page.goto('./');
   await expect(page.getByText('Welcome to PaisaTrack')).toBeVisible();
 }
@@ -45,11 +74,12 @@ test.describe('first run', () => {
     await expect(page.getByRole('button', { name: 'Load sample data' })).toBeVisible();
   });
 
-  test('presents sync as optional, not required', async ({ page }) => {
+  test('shows that it is connected to the server', async ({ page }) => {
     await freshApp(page);
-    // The visible label is hidden below lg, so assert on the accessible name,
-    // which is present at every width.
-    await expect(page.getByRole('button', { name: /Sync status: Local only/ })).toBeVisible();
+    // The indicator is icon-only at every width, so assert on its accessible
+    // name. "Connected" is the claim that matters: with no local copy, a user
+    // needs to be able to tell at a glance whether their changes can be saved.
+    await expect(page.getByRole('status', { name: /Connected/ })).toBeVisible();
   });
 });
 

@@ -200,7 +200,7 @@ describe('/ocr input handling', () => {
     // A missing page in the middle of a statement is a hole the user will
     // find when reconciling and cannot explain. It has to be said out loud.
     expect(r.body?.failures).toHaveLength(1);
-    expect(String((r.body?.failures as string[])[0])).toMatch(/Page 2/);
+    expect(String((r.body?.failures as string[] | undefined)?.[0])).toMatch(/Page 2/);
     expect(r.body?.lines).toHaveLength(2);
   });
 

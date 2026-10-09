@@ -6,92 +6,99 @@
 
 ## 1. The shape of it
 
-There is no backend. The app is a static bundle on a CDN, a database in the
-browser, and one JSON file in a private git repo.
+A static bundle on a CDN, and one small server holding one small database.
 
 ```
-┌──────────────────────────────────────────────────────────────────────┐
-│  BROWSER                                                             │
-│                                                                      │
-│   React 19 ── TanStack Router ── Zustand (UI state only)             │
-│        │                                                             │
-│        │ reads (always, synchronously from memory)                   │
-│        ▼                                                             │
-│   ┌──────────────────┐        ┌────────────────────────────────┐    │
-│   │  Dexie/IndexedDB │◀──────▶│  lib/finance/*  (pure)         │    │
-│   │  SOURCE OF TRUTH │  data  │  no React, no DB, no network   │    │
-│   └────────┬─────────┘        └────────────────────────────────┘    │
-│            │ writes go through lib/db/repository.ts ONLY             │
-│            ▼                                                         │
-│   ┌──────────────────┐                                               │
-│   │   sync queue     │  debounced 3s, coalesced into one commit      │
-│   └────────┬─────────┘                                               │
-└────────────┼─────────────────────────────────────────────────────────┘
-             │  Octokit (lazy-loaded; only if a token exists)
-             ▼
-┌──────────────────────────────────────────────────────────────────────┐
-│  GITHUB (free forever)                                               │
-│                                                                      │
-│   paisatrack-app  (PUBLIC)      paisatrack-data  (PRIVATE)           │
-│   ├── Pages = static host       └── data.json                        │
-│   │   (Fastly CDN)                  ├── one commit per sync          │
-│   └── Actions: build, deploy,       ├── full version history         │
-│       monthly rate refresh          └── snapshots/ nightly           │
-└──────────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────┐
+│  BROWSER  (github.io — static, no server-side anything)             │
+│                                                                     │
+│   React 19 ── TanStack Router ── Zustand (UI state only)            │
+│        │                                                            │
+│        │ reads, synchronously from memory                           │
+│        ▼                                                            │
+│   lib/store/records ─── frozen array per table                      │
+│        ▲                     │                                      │
+│        │ confirmed writes    │ useSyncExternalStore                 │
+│        │                     ▼                                      │
+│   lib/db/repository      every page and hook                        │
+│        │   THE ONLY WRITE PATH                                      │
+└────────┼────────────────────────────────────────────────────────────┘
+         │  HTTPS, Bearer token, CSP-pinned to one origin
+         ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│  CLOUDFLARE WORKER  (the user's own account, free plan, no card)    │
+│                                                                     │
+│   GET  /data        everything, assembled by string concatenation   │
+│   POST /data/write  a batch of upserts and deletes, one D1 txn      │
+│   POST /ocr         a vision model reads a scan        (opt-in)     │
+│   POST /push/*  +   a daily cron sends a bodiless nudge (opt-in)    │
+│        │                                                            │
+│        ▼                                                            │
+│   D1 — one table, `records`, each row the JSON the client sent      │
+└─────────────────────────────────────────────────────────────────────┘
 ```
 
 ### Why this shape
 
-**Reads never touch the network.** That is what makes the app feel instant and
-work offline. It also means every derived figure is a pure function over arrays
-already in memory — the whole dashboard recomputes in microseconds.
+**One copy.** PaisaTrack was local-first until October 2026 and the data lived
+in IndexedDB, with an optional GitHub sync. That design answered "offline" well
+and "which device has my data?" badly — a phone and a laptop each held a
+partial copy, and the code to reconcile them was the most intricate in the
+project. One database removes the question rather than answering it.
 
-**Writes land locally first, then queue.** The UI never waits on GitHub. If sync
-is off, broken, or offline, nothing changes about how the app behaves.
+**No account system.** One dataset, one token. Anyone holding the token is the
+owner. That is the right shape for one person's finances and the wrong shape
+for anything else.
 
-**Every write is a commit.** The sync history *is* the backup history. Restore
-from any point in the git log.
+**The finance engine never moved.** Every rupee figure is still computed in the
+browser by the pure functions in `lib/finance`. The server stores text and has
+no idea what a rupee is — which is why the calculations stayed testable and why
+the move touched almost none of them.
 
 ## 2. Data flow
 
 ### Read path
 
 ```
-Dexie table ──▶ useLiveQuery ──▶ useDashboardData (ONE atomic query)
-                                        │
-                                        ▼
-                          resolveAllCardStates / resolveAllLoanStates
-                                        │
-                                        ▼
-                     monthSnapshot · upcomingDues · debtOverview · netWorth
-                                        │
-                                        ▼
-                                    components
+boot ──▶ GET /data ──▶ { expenses: [...], loans: [...], ... }
+                            │
+                   store.setTable() × every table, THEN notify once
+                            │
+                            ▼
+           useSyncExternalStore, one subscription per table
+                            │
+                            ▼
+              useExpenses() / useDashboardData() / …
+                            │
+                 pure finance functions ──▶ rendered figures
 ```
 
-Two rules this enforces:
+Nothing renders before the fetch lands — `BootGate` holds the app on a spinner.
+Showing a dashboard of zeros while a request is in flight would state a net
+worth of ₹0, and a reader has no way to tell that from a wiped database.
 
-1. **The dashboard reads atomically.** One `useLiveQuery` across twelve tables,
-   not twelve separate ones. Separate queries resolve independently, so the page
-   renders real income against zero spending for a frame — a half-loaded balance
-   sheet is wrong, not merely incomplete.
-2. **One resolver per entity.** `cardState.ts` and `loanState.ts` are the single
-   source of "what does this actually owe". Every screen reads from them, so no
-   two places can quote a different balance for the same card.
+**One request for everything**, because everything is small and because
+seventeen per-table requests would be seventeen chances to render real income
+against zero spending. The store fills every table and then notifies once, so no
+subscriber can observe a half-loaded balance sheet — the atomicity the old
+`useLiveQuery` was carefully written to preserve is now structural rather than
+careful.
 
 ### Write path
 
 ```
-component ──▶ lib/db/repository.ts ──▶ Dexie table
-                      │                      │
-                      │                      └──▶ stamps updatedAt + deviceId
-                      └──▶ _syncQueue ──▶ emitChange() ──▶ sync engine (debounced)
+page ──▶ lib/db/repository ──▶ POST /data/write ──▶ D1 (one transaction)
+                                      │
+                           accepted?  │ yes
+                                      ▼
+                        store applies it, notifies subscribers
+                                      │
+                                      ▼
+                            every screen showing that table
 ```
 
-Nothing writes to a Dexie table directly except the seeder and the sync applier,
-both of which pass `skipSync` deliberately. Deletes are **soft** — `deletedAt` is
-set — so a deletion travels to the other device instead of being resurrected by
-its stale copy.
+Confirmed, not optimistic. The round trip is the cost; the benefit is that a
+figure on screen is a figure in the database.
 
 ## 3. Folder structure
 
@@ -127,13 +134,13 @@ PaisaTrack/
     │   │   ├── cash.ts          Cash/bank projection and reconciliation
     │   │   └── dashboard.ts     Derived aggregates
     │   ├── db/
-    │   │   ├── schema.ts        Dexie schema + versions
-    │   │   ├── repository.ts    THE ONLY WRITE PATH
-    │   │   └── seed.ts          Sample data, one transaction
-    │   ├── sync/
-    │   │   ├── merge.ts         Conflict rules (pure, tested)
-    │   │   └── engine.ts        Background push/pull
-    │   ├── github/client.ts     Octokit wrapper, lazy-loaded
+    │   │   ├── repository.ts    THE ONLY WRITE PATH → the server
+    │   │   ├── legacy.ts        Reads the OLD IndexedDB, migration only
+    │   │   └── seed.ts          Sample data, one batch
+    │   ├── store/records.ts     In-memory records, filled from the server
+    │   ├── server/config.ts     Worker URL and token (localStorage)
+    │   ├── backup/payload.ts    The JSON backup file format
+    │   ├── push/                Reminder subscriptions — uploads dates only
     │   ├── import/
     │   │   ├── tokens.ts        Indian dates and amounts (pure)
     │   │   ├── statement.ts     Text -> transactions (pure)
@@ -179,8 +186,7 @@ run in seven seconds.
 | Language | TypeScript 7 | `baseUrl` is removed; `typescript-eslint` does not support it yet (see Rules). |
 | Routing | TanStack Router, code-based | Fully typed `to=`. A helper function erases path literals, so routes are declared one by one. |
 | State | Zustand | UI state only. Domain state lives in Dexie. |
-| Local store | Dexie | Live queries, compound indexes, schema versioning. |
-| Sync | Octokit, lazy | ~105 kB, and most sessions never configure sync. |
+| Data store | Cloudflare D1, via the Worker | SQLite at the edge, free tier, no card. One table of JSON text — see §5. |
 | Styling | Tailwind v4 | CSS-variable theming; no runtime CSS-in-JS. |
 | Components | Radix + shadcn patterns | Copied in, owned here. Compatible with [21st.dev](https://21st.dev). |
 | Icons | Phosphor | Six weights, and a real `CurrencyInr` glyph. |
@@ -188,7 +194,7 @@ run in seven seconds.
 | PDF reading | pdf.js, lazy | Extraction, not OCR — portal statements have a real text layer. Loaded only when a PDF is picked. |
 | Spreadsheets | fflate + DOMParser | Hand-rolled XLSX reader. npm `xlsx` 0.18.5 carries an unpatched prototype-pollution CVE; fflate was already a dependency. |
 | OCR | tesseract.js, self-hosted | Scans only, offered not automatic. Served from our own origin — the CDN default would have needed `script-src` for a third party. See Rules §4.6. |
-| Optional server | Cloudflare Workers, free plan | The only two jobs the device cannot do: a vision model for an unreadable scan, and a push while the app is closed. No card. Absent by default. |
+| Server | Cloudflare Workers, free plan | Holds the records, plus OCR and push. No card. Required — there is no local copy. |
 | Money | big.js | Never float. See Rules. |
 | Validation | Zod | Everything crossing the trust boundary. |
 | PWA | vite-plugin-pwa / Workbox | Precache everything the build emits, so the whole app works offline from the first visit. |
@@ -197,57 +203,51 @@ run in seven seconds.
 
 ## 5. Database
 
-### Schema versions
+### Schema
 
-| Version | Change |
-| --- | --- |
-| 1 | Core tables, sync bookkeeping, settings |
-| 2 | `cardTxns`, `cardPayments` — transaction-level card ledger |
+One table. The record is stored as the JSON text the client sent.
 
-Dexie carries older data forward untouched. Adding a table is a new `version()`
-block, never an edit to an existing one.
+```sql
+CREATE TABLE records (
+  id         TEXT PRIMARY KEY,
+  tbl        TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  data       TEXT NOT NULL      -- the record, verbatim
+);
+CREATE INDEX idx_records_tbl ON records(tbl);
+```
 
-### Indexes
+A column per field was rejected, and the reason is the Worker's 10ms CPU budget:
+a normalised schema means parsing every incoming record and re-serialising every
+outgoing one, which is real CPU spent re-deriving something the client already
+had in the right shape. Opaque text means a read is assembled by **string
+concatenation** — the `data` column is already valid JSON, so the response is
+built by joining rows with commas. Nothing is parsed; nothing is stringified.
 
-Chosen from actual query shapes, not guessed:
+The trade is that the server cannot validate or query inside a record. That is
+acceptable because there is one writer, it validates with Zod before sending,
+and every figure is computed on the device. This is storage, not a domain model.
+**If a second user or a server-side report ever appears, this is the first
+decision to revisit.**
 
-| Table | Index | Query it serves |
-| --- | --- | --- |
-| `expenses` | `[category+date]` | Dashboard category rollups for a month |
-| `expenses` | `date`, `paymentMethod`, `creditCardId` | Filters |
-| `cardTxns` | `[cardId+date]` | Ledger walks one card in date order |
-| `cardPayments` | `[cardId+date]` | Same |
-| `budgets` | `[month+category]` | Budget progress lookup |
-| `billEntries` | `billingMonth`, `dueDate`, `status` | Monthly view, upcoming dues |
-| all | `updatedAt` | Sync watermarking |
+`ensureSchema()` runs `CREATE TABLE IF NOT EXISTS` before each request rather
+than requiring a migration step during setup — one fewer thing to get wrong in
+the README, and D1 makes it cheap.
+
+### No tombstones
+
+A delete is `DELETE FROM records`. Soft deletes existed so a deletion could
+propagate through sync and beat a stale edit from another device; with one
+authoritative copy there is no stale edit to beat.
 
 ### Money
 
 **Every monetary value is an integer number of paise.** ₹1,234.56 is `123456`.
 Integer addition is exact to `Number.MAX_SAFE_INTEGER` (~₹90 lakh crore).
-Anything that multiplies or divides goes through big.js.
+Anything that multiplies or divides goes through big.js. This survived the move
+untouched: paise travel as JSON integers and come back as JSON integers.
 
-## 6. Sync protocol
-
-```
-PULL   GET /repos/{owner}/{repo}/contents/data.json   If-None-Match: <etag>
-       └─ 304 → nothing changed, costs no rate limit
-       └─ 200 → parse, merge, apply what is newer
-
-PUSH   PUT /repos/{owner}/{repo}/contents/data.json   { content, sha }
-       └─ 409 → someone else committed; re-pull, merge, retry (max 3)
-```
-
-**Conflict resolution** — last-write-wins on `updatedAt`, with `deviceId` as a
-deterministic tiebreaker so both devices independently reach the same answer. A
-tombstone beats a live record at the same timestamp.
-
-**Deviation from the original brief:** reads use the Contents API rather than
-`raw.githubusercontent.com`, because that host cannot serve a private repo with
-a bearer token. The Contents API supports conditional requests, so 30-second
-polling is effectively free.
-
-## 7. Performance architecture
+## 6. Performance architecture
 
 | Technique | Where | Effect |
 | --- | --- | --- |
@@ -266,7 +266,7 @@ polling is effectively free.
 | Debounced search | `Expenses.tsx` | Filtering 64+ rows on every keystroke |
 | Progressive list rendering | `Expenses.tsx` | Renders a growing window (100 rows, extended by an IntersectionObserver) rather than 1,000 at once. Not true virtualisation — rows are not recycled — and the other list pages do not use it yet. |
 
-## 8. Statement import
+## 7. Statement import
 
 A file goes in; reviewable candidates come out. Nothing reaches the database
 without the user ticking it, because a parser working across a dozen bank
@@ -320,12 +320,24 @@ date + amount + normalised description, and anything already stored arrives
 pre-unticked rather than silently dropped, so the user can see what was
 skipped.
 
-## 9. The optional server
+## 8. The server
 
-PaisaTrack has no server. It has an *optional* one, which is a different thing:
-a Cloudflare Worker the user deploys to their own account, for the two jobs a
-local-first app genuinely cannot do, and which the app is fully functional
-without.
+PaisaTrack is no longer local-first. Until October 2026 the records lived in
+IndexedDB on whichever device typed them, with an optional GitHub sync to
+reconcile devices; they live in a Cloudflare D1 database in the user's own
+account now, and the app reads and writes it directly.
+
+**What that bought:** one copy of the truth. The old design's problem was never
+offline support, which it did well — it was that a phone and a laptop held
+different data and neither was complete, and the machinery to reconcile them
+(last-write-wins, tombstones, a deviceId tiebreaker, a conflict table) was the
+most intricate code in the project and existed solely to paper over having two
+copies. One writer and one database needs none of it. It was all deleted, along
+with Dexie, which left the bundle entirely.
+
+**What it cost:** offline. Nothing is cached on the device, so with no
+connection there is nothing to show — chosen knowingly over a cache that can
+disagree with the thing it is caching.
 
 ```
   Settings ──▶ URL + token in _settings (IndexedDB)
@@ -377,15 +389,19 @@ TypeScript program would pull `@cloudflare/workers-types` globals — `Ai`,
 `KVNamespace`, a different `fetch` — into the type space of a browser app that
 is not a Worker. It has its own tsconfig, its own vitest, and its own CI steps.
 
-## 10. What this architecture cannot do
+## 9. What this architecture cannot do
 
 Stated plainly, because a reader will otherwise ask:
 
-- **No server-side anything** — no server-side validation, no server-side
-  permission checks, no inbound rate limiting, no server-side caching, no load
-  balancer, no connection pooling. The optional Worker (§9) does not change
-  this: it holds no user data, has no notion of an account, and every figure
-  the app reports is computed on the device whether it is deployed or not.
+- **No server-side validation or business logic.** The Worker (§8) stores and
+  returns opaque text. It has no notion of an account, no permission model
+  beyond one shared token, and no idea what a rupee is — every figure the app
+  reports is computed on the device.
+- **No offline use.** Nothing is cached locally; with no connection there is
+  nothing to show. Given up deliberately in exchange for one copy of the truth
+  (PRD §5.2).
+- **No version history.** D1 holds the current value of each record, not its
+  past. A backup file from Settings is the only way back.
 - **No authentication.** The device is the trust boundary. Anyone with the
   unlocked device has the data, exactly as with a notes app.
 - **No multi-user isolation**, because there is one user.

@@ -1,8 +1,15 @@
 /**
- * PaisaTrack's only server.
+ * PaisaTrack's server.
  *
- * It exists for the two jobs a local-first app genuinely cannot do by itself,
- * and it is deliberately incapable of anything else:
+ * It holds the data now. That is a change in kind, not degree: until this
+ * commit the Worker was an optional accessory and the app's records lived in
+ * IndexedDB on whichever device typed them. They live here instead, so the
+ * data follows the person rather than the laptop.
+ *
+ *   GET  /data         Everything, as one JSON document.
+ *   POST /data/write   A batch of upserts and deletes.
+ *   POST /data/counts  How many records exist, per table.
+ *   POST /data/wipe    Delete everything.
  *
  *   POST /ocr          Read a scanned statement with a vision model, when the
  *                      on-device engine has made a mess of it. Stateless — the
@@ -14,6 +21,13 @@
  *                      no amount, no payee, no account. Only a date ever
  *                      reaches this Worker, and the app fills in the detail
  *                      locally after the user taps.
+ *
+ * ## The token is now the lock on everything
+ *
+ * While the records were local, the trust boundary was the device: the data was
+ * as safe as an unlocked phone. It is now reachable at a URL, and `API_TOKEN`
+ * is the only thing between a stranger and somebody's complete financial
+ * history. It deserves to be long and random, and it must never be committed.
  *
  * ## Why it fits on the free plan
  *
@@ -31,17 +45,20 @@
  *     wait, not work;
  *   - a push is one ECDSA signature — well under a millisecond — plus a POST.
  *
- * ## What it is not
+ * ## What it is still not
  *
- * Not a database, not an account system, not a sync backend. Sync is GitHub,
- * and it stays GitHub. Nothing here is required for the app to function: with
- * the Worker unconfigured or offline, OCR falls back to the on-device engine
- * and reminders simply do not fire.
+ * Not an account system, and not multi-tenant. There is one dataset and one
+ * token; anyone holding the token is the owner. That is the right shape for a
+ * single person's finances and the wrong shape for anything else, and it is the
+ * assumption to revisit first if a second user ever appears.
  */
+import { applyWrites, counts, ensureSchema, MAX_OPS, readAll, wipe, type WriteOp } from './data';
 
 export interface Env {
   AI: Ai;
   PUSH: KVNamespace;
+  /** The records database. See data.ts. */
+  DB: D1Database;
   /** Shared secret. Without it this is an open endpoint for burning someone's neuron budget. */
   API_TOKEN: string;
   /** Comma-separated origins allowed to call it. */
@@ -86,7 +103,7 @@ function corsHeaders(origin: string | null, env: Env): Record<string, string> {
   const ok = origin && allowed.includes(origin);
   return {
     'Access-Control-Allow-Origin': ok ? origin : allowed[0] ?? 'null',
-    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type, Authorization',
     'Access-Control-Max-Age': '86400',
     Vary: 'Origin',
@@ -366,6 +383,54 @@ async function handleTest(request: Request, env: Env, cors: Record<string, strin
   return json({ ok: status >= 200 && status < 300, status }, status < 500 ? 200 : 502, cors);
 }
 
+/**
+ * Read the whole dataset.
+ *
+ * One request for everything, because everything is small — a few years of one
+ * person's finances is a couple of megabytes — and because a per-table endpoint
+ * would mean seventeen round trips to render a dashboard.
+ *
+ * The body is pre-assembled JSON text from data.ts, handed to Response
+ * untouched.
+ */
+async function handleRead(env: Env, cors: Record<string, string>): Promise<Response> {
+  await ensureSchema(env.DB);
+  const body = await readAll(env.DB);
+  return new Response(body, {
+    status: 200,
+    headers: {
+      'Content-Type': 'application/json',
+      // This is the user's financial history. No shared cache anywhere on the
+      // path should be holding a copy of it.
+      'Cache-Control': 'no-store',
+      ...cors,
+    },
+  });
+}
+
+async function handleWrite(request: Request, env: Env, cors: Record<string, string>): Promise<Response> {
+  let body: { ops?: unknown };
+  try {
+    body = await request.json();
+  } catch {
+    return json({ error: 'Expected a JSON body.' }, 400, cors);
+  }
+
+  if (!Array.isArray(body.ops)) return json({ error: 'Expected { ops: [...] }.' }, 400, cors);
+  if (body.ops.length > MAX_OPS) {
+    return json({ error: `At most ${MAX_OPS} ops per request. Send them in batches.` }, 400, cors);
+  }
+
+  await ensureSchema(env.DB);
+  try {
+    const result = await applyWrites(env.DB, body.ops as WriteOp[]);
+    return json({ ok: true, ...result }, 200, cors);
+  } catch (e) {
+    // A rejected op is a client bug, not a server failure — say which.
+    return json({ error: e instanceof Error ? e.message : 'That write was rejected.' }, 400, cors);
+  }
+}
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const origin = request.headers.get('Origin');
@@ -379,7 +444,12 @@ export default {
     // just enough to confirm the Worker is deployed and its bindings exist.
     if (pathname === '/health') {
       return json(
-        { ok: true, ai: typeof env.AI?.run === 'function', push: Boolean(env.VAPID_PUBLIC_KEY) },
+        {
+          ok: true,
+          ai: typeof env.AI?.run === 'function',
+          push: Boolean(env.VAPID_PUBLIC_KEY),
+          db: typeof env.DB?.prepare === 'function',
+        },
         200,
         cors,
       );
@@ -391,10 +461,26 @@ export default {
       return json({ key: env.VAPID_PUBLIC_KEY ?? null }, 200, cors);
     }
 
-    if (request.method !== 'POST') return json({ error: 'Method not allowed.' }, 405, cors);
+    // /data is the one authenticated GET: reading the whole dataset has no
+    // body to send, and making it a POST purely for symmetry would mean giving
+    // up HTTP caching semantics and conditional requests later.
+    const readOnly = pathname === '/data' && request.method === 'GET';
+    if (!readOnly && request.method !== 'POST') {
+      return json({ error: 'Method not allowed.' }, 405, cors);
+    }
     if (!authorised(request, env)) return json({ error: 'Unauthorised.' }, 401, cors);
 
     switch (pathname) {
+      case '/data':
+        return handleRead(env, cors);
+      case '/data/write':
+        return handleWrite(request, env, cors);
+      case '/data/counts':
+        await ensureSchema(env.DB);
+        return json({ counts: await counts(env.DB) }, 200, cors);
+      case '/data/wipe':
+        await ensureSchema(env.DB);
+        return json({ ok: true, deleted: await wipe(env.DB) }, 200, cors);
       case '/ocr':
         return handleOcr(request, env, cors);
       case '/push/subscribe':

@@ -36,7 +36,7 @@ preference.
 
 ### 1.3 `lib/finance` stays pure
 
-No React, no Dexie, no `fetch`, no `localStorage`. Pure functions over plain
+No React, no store, no `fetch`, no `localStorage`. Pure functions over plain
 data. That is why 309 tests run in under a minute and why the numbers are
 trustworthy.
 
@@ -70,7 +70,7 @@ already does proves nothing.
 | --- | --- | --- |
 | Money arithmetic | `big.js` via `money.ts` | raw JS numbers, decimal.js |
 | Dates | `date-fns` via `dates.ts` | moment, dayjs, raw `Date` maths |
-| Local storage | Dexie via `repository.ts` | `localStorage` for domain data |
+| Domain data | `repository.ts` → the Worker | `localStorage` for domain data |
 | Validation | Zod via `lib/validation.ts` | hand-rolled checks |
 | Icons | Phosphor via `components/icons.tsx` | importing a second icon set |
 | Charts | Recharts via `LazyCharts.tsx` | importing `charts.tsx` directly |
@@ -79,7 +79,7 @@ already does proves nothing.
 
 ### Do not add
 
-- **Any state manager beyond Zustand.** Domain state belongs in Dexie.
+- **Any state manager beyond Zustand.** Domain state belongs in `lib/store/records`.
 - **A CSS-in-JS runtime.** Tailwind v4 compiles away; emotion/styled-components
   would add runtime cost for nothing.
 - **A second icon set.** One, aliased in `icons.tsx`.
@@ -160,7 +160,7 @@ is applied.
 
 - **Never hardcode a secret.** No tokens, keys or credentials in source — the
   repo is public.
-- The GitHub token lives in **IndexedDB**, is masked in the UI once saved, and
+- The server token lives in **localStorage**, is masked in the UI once saved, and
   is sent **only** to `api.github.com`.
 - **Never log it**, never put it in a URL or query string, never include it in
   an error message or a bug report.
@@ -197,9 +197,15 @@ comment.
 
 ### 4.5 Injection
 
-Dexie is not a string-query database — there is no query string to concatenate
-into, so SQL/NoSQL injection does not arise. Keep it that way: never build a
-query by string concatenation if a query language is ever introduced.
+The Worker's SQL is **entirely parameterised** — every value reaches D1 through
+`.bind()`, and the only identifier the client can influence is the table name,
+which is checked against an allowlist before it is used. Keep it that way: no
+statement in `worker/src/data.ts` may be assembled by string concatenation.
+
+Note that `readAll()` *does* build its response by concatenation. That is
+output, not SQL — the strings being joined are the `data` column exactly as
+stored, and the rows cannot escape the JSON they are already valid instances
+of. See `data.test.ts`, which parses every shape back.
 
 ### 4.6 Headers
 
@@ -248,8 +254,8 @@ CDN. Do not "simplify" this by deleting the vendoring step.
 
 | Metric | Budget | Measured |
 | --- | --- | --- |
-| Initial JS (transferred) | ≤ 300 kB | **284 kB** across 16 files |
-| Precache total | ≤ 1.5 MB | **2.96 MB** — over, see below |
+| Initial JS (transferred) | ≤ 300 kB | **~250 kB** — down since Dexie and Octokit left the shell |
+| Precache total | ≤ 1.5 MB | **2.86 MB** — over, see below |
 | Any single eager chunk | ≤ 150 kB gzipped | **119 kB** (`react`) |
 | Lighthouse performance | ≥ 90 | **92** |
 | Lighthouse accessibility | ≥ 95 | **100** |
@@ -272,22 +278,26 @@ also running builds and tests — it has been observed swinging between 110ms an
 700ms on the *same* bundle, which moves the performance score by fifteen points.
 When a change needs to be shown not to have cost anything, measure the
 preloaded set instead: the chunks `index.html` actually references are
-deterministic, and at the time of writing they total **839.6 kB uncompressed**
-(`react` 435, `AppShell` 215, `db` 102, `money` 62, the rest small). If a change
+deterministic, and at the time of writing they total **723.8 kB uncompressed**
+(`react` 435, `AppShell` 204, `money` 62, the rest small). It was 839.6 kB
+before the move to a hosted database, which removed Dexie (~93 kB) and the
+Octokit sync client from the shell entirely. If a change
 has not moved that list, it has not moved the critical path, whatever a noisy
 Lighthouse run says. Re-measure the score on an otherwise idle machine, and
 interleave runs against the previous build rather than comparing to a number
 recorded on a different day.
 
-**Precache, 2.96 MB against a 1.5 MB budget.** Bought: every page, every chart,
-CSV import and PDF export all work offline from the first visit, which is a
-stated product requirement. The earlier carve-outs excluded chunks by name, and
+**Precache, 2.86 MB against a 1.5 MB budget.** Bought: every page, every chart,
+CSV import and PDF export are all cached from the first visit, which is a
+stated product requirement — though note that precaching now buys a fast,
+reliable *shell*, not a working app: the records come from the server, so an
+offline visit gets the interface and an explanation rather than data. The earlier carve-outs excluded chunks by name, and
 when those names stopped existing the exclusions silently matched nothing — a
 budget kept by accident is worse than one knowingly spent. Precaching is a
 background service-worker install and does not compete with first paint, which
 is why the number that actually matters, initial JS, is still inside budget.
 
-**The OCR engine is deliberately NOT in that 2.96 MB.** `public/tesseract/` is
+**The OCR engine is deliberately NOT in that 2.86 MB.** `public/tesseract/` is
 about 14 MB of WebAssembly cores and a language model, and `globIgnores`
 excludes it from the precache. Shipping it in the service-worker install would
 make every first visit pay for a feature most people never open, on connections
@@ -334,14 +344,14 @@ this honestly is better than pretending.
 | --- | --- | --- |
 | Load balancer | **N/A** | Static files on GitHub Pages' CDN. Nothing to balance. |
 | Server-side caching | **N/A** | No server. Caching is HTTP + service worker. |
-| Database connection pooling | **N/A** | IndexedDB is one in-process connection. |
+| Database connection pooling | **N/A** | D1 is accessed through a Worker binding; Cloudflare owns the pool. |
 | Inbound rate limiting | **N/A** | No inbound endpoint. *Outbound* calls to GitHub **are** throttled. |
 | Authentication | **N/A** | Single-user, local. The device is the boundary. |
 | Server-side permission checks | **N/A** | No server, one user, no privileged routes. |
 | "Don't trust frontend user IDs" | **N/A** | No server to trust them *to*. |
 | Admin routes | **N/A** | None exist. |
 | Firebase / Supabase hardening | **N/A** | Neither is used. |
-| SQL/NoSQL injection | **N/A** | Dexie is not string-query based. |
+| SQL injection | **Handled** | Every value is bound; table names are allowlisted. See §4.5. |
 | Rate-limit login/signup | **N/A** | No login. |
 | Spending caps | **N/A** | Nothing can incur a charge. |
 | Duplicate subscriptions / payments | **N/A** | No payments. |

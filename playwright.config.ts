@@ -10,6 +10,17 @@ import { defineConfig, devices } from '@playwright/test';
 const PORT = 4178;
 const BASE = `http://localhost:${PORT}/paisatrack/`;
 
+/**
+ * The stand-in for the Worker.
+ *
+ * The app has no local storage any more, so there is nothing to test against
+ * without a server. This one runs the real `worker/src/data.ts` over an
+ * in-memory map and namespaces by token, so parallel tests cannot see each
+ * other's records. See e2e/server.mjs.
+ */
+const SERVER_PORT = 8788;
+const SERVER = `http://localhost:${SERVER_PORT}`;
+
 export default defineConfig({
   testDir: './e2e',
   fullyParallel: true,
@@ -35,10 +46,26 @@ export default defineConfig({
     { name: 'mobile', use: { ...devices['Pixel 7'] } },
   ],
 
-  webServer: {
-    command: `npm run build:only && npx vite preview --port ${PORT} --strictPort`,
-    url: BASE,
-    reuseExistingServer: !process.env.CI,
-    timeout: 180_000,
-  },
+  webServer: [
+    {
+      command: `npx tsx e2e/server.mjs`,
+      url: `${SERVER}/health`,
+      reuseExistingServer: !process.env.CI,
+      timeout: 60_000,
+      env: { E2E_SERVER_PORT: String(SERVER_PORT) },
+    },
+    {
+      command: `npm run build:only && npx vite preview --port ${PORT} --strictPort`,
+      url: BASE,
+      reuseExistingServer: !process.env.CI,
+      timeout: 180_000,
+      /*
+        The Worker origin is compiled into the Content Security Policy, so the
+        build the tests run against has to name the test server — otherwise
+        every request is blocked before it is sent and every test fails with an
+        empty page and no explanation.
+      */
+      env: { VITE_WORKER_ORIGIN: SERVER },
+    },
+  ],
 });

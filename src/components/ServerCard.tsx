@@ -1,11 +1,14 @@
 /**
- * Settings for the optional Cloudflare Worker.
+ * Settings for the Cloudflare Worker.
  *
- * The framing matters as much as the controls. PaisaTrack works completely
- * without this, every figure it computes is computed on the device, and
- * configuring a Worker switches nothing on by itself — each of the two
- * features it enables is a separate, explicit opt-in. A settings screen that
- * made a server feel expected would be lying about the architecture.
+ * The framing matters as much as the controls, and it changed: this used to be
+ * an optional accessory to a local-first app, and it is now where the records
+ * live. Without a URL and token here PaisaTrack has nothing to show.
+ *
+ * What stayed opt-in is everything built ON TOP of storage — server OCR and
+ * push reminders each have their own switch, because each has a consequence
+ * the user should agree to separately rather than inherit from having set up
+ * a database.
  *
  * The screen's other job is to fail loudly in the one place this is easy to get
  * wrong: the Content Security Policy names the Worker's origin at build time,
@@ -223,14 +226,14 @@ export function ServerCard() {
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-base">
           <CloudIcon className="h-4 w-4" />
-          Optional server
+          Your server
           {config && <Badge variant="outline">Configured</Badge>}
         </CardTitle>
         <CardDescription>
-          A Cloudflare Worker you deploy yourself, on their free plan, with no card. It adds two
-          things and is required for neither: reading a scan the on-device engine cannot manage, and
-          reminding you about a payment while the app is closed. Everything else — every figure, every
-          calculation — stays on this device either way.
+          A Cloudflare Worker you deploy yourself, on their free plan, with no card. Your records
+          live on it, so PaisaTrack needs it to show anything at all. Two extras sit on top and are
+          separately optional: reading a scan the on-device engine cannot manage, and reminding you
+          about a payment while the app is closed.
         </CardDescription>
       </CardHeader>
 

@@ -9,7 +9,9 @@
  * seeded so the sample looks the same every time you load it.
  */
 import { addDays, addMonths, format, startOfMonth } from 'date-fns';
-import { db } from './schema';
+import { bulkPutMany, remove } from './repository';
+import { getTable } from '@/lib/store/records';
+import { SYNC_TABLES } from '@/types';
 import { getDeviceId, nowISO } from './repository';
 import { toPaise } from '@/lib/finance/money';
 import { calculateEMI } from '@/lib/finance/emi';
@@ -499,34 +501,31 @@ export async function seedSampleData(): Promise<{ counts: Record<string, number>
   // observe a half-seeded database — real income against zero spending — and
   // would leave that mess behind if a write failed partway through.
   //
-  // Seeding is a local demo action, so these writes deliberately bypass the
-  // repository's sync queue — there is nothing here worth committing to GitHub.
-  // Dexie's transaction zone does not survive an async wrapper, so the tables
-  // are written directly rather than through bulkPut().
-  await db.transaction(
-    'rw',
-    [
-      db.users, db.salaryProfile, db.income, db.creditCards, db.statements,
-      db.loans, db.bills, db.billEntries, db.expenses, db.investments,
-      db.budgets, db.goals, db.cashAccounts,
-    ],
-    () =>
-      Promise.all([
-        db.users.bulkPut([user]),
-        db.salaryProfile.bulkPut([salaryProfile]),
-        db.income.bulkPut(income),
-        db.creditCards.bulkPut(creditCards),
-        db.statements.bulkPut(statements),
-        db.loans.bulkPut(loans),
-        db.bills.bulkPut(bills),
-        db.billEntries.bulkPut(billEntries),
-        db.expenses.bulkPut(expenses),
-        db.investments.bulkPut(investments),
-        db.budgets.bulkPut(budgets),
-        db.goals.bulkPut(goals),
-        db.cashAccounts.bulkPut(cashAccounts),
-      ]),
-  );
+  /*
+    One write across every table.
+
+    This used to be a Dexie transaction, for a reason that still applies: a
+    half-seeded database shows statements without their card and payments
+    against loans that do not exist, which reads as corruption rather than as
+    an interrupted demo. The Worker applies each batch inside one D1
+    transaction, so the guarantee survives the move — it is just enforced on
+    the server now instead of in the browser.
+  */
+  await bulkPutMany([
+    { table: 'users', records: [user] },
+    { table: 'salaryProfile', records: [salaryProfile] },
+    { table: 'income', records: income },
+    { table: 'creditCards', records: creditCards },
+    { table: 'statements', records: statements },
+    { table: 'loans', records: loans },
+    { table: 'bills', records: bills },
+    { table: 'billEntries', records: billEntries },
+    { table: 'expenses', records: expenses },
+    { table: 'investments', records: investments },
+    { table: 'budgets', records: budgets },
+    { table: 'goals', records: goals },
+    { table: 'cashAccounts', records: cashAccounts },
+  ] as never);
 
   return {
     counts: {
@@ -546,14 +545,16 @@ export async function seedSampleData(): Promise<{ counts: Record<string, number>
 
 /** Is the database empty? Drives the first-run empty state. */
 export async function isEmpty(): Promise<boolean> {
-  const [expenses, cards, bills, loans, income] = await Promise.all([
-    db.expenses.count(),
-    db.creditCards.count(),
-    db.bills.count(),
-    db.loans.count(),
-    db.income.count(),
-  ]);
-  return expenses + cards + bills + loans + income === 0;
+  // Read from the store rather than the server: it was filled by the boot
+  // fetch, so this is already the server's answer and costs no round trip.
+  return (
+    getTable('expenses').length +
+      getTable('creditCards').length +
+      getTable('bills').length +
+      getTable('loans').length +
+      getTable('income').length ===
+    0
+  );
 }
 
 /** Remove everything the seeder added, leaving real data alone. */
@@ -564,10 +565,9 @@ export async function removeSampleData(): Promise<void> {
     id.startsWith('inv_') || id.startsWith('budget_') || id.startsWith('goal_') ||
     id.startsWith('inc_') || id === USER_ID || id === 'salary_sample';
 
-  for (const table of db.tables) {
-    if (table.name.startsWith('_')) continue;
-    const rows = (await table.toArray()) as Array<{ id: string }>;
-    const ids = rows.filter((r) => isSample(r.id)).map((r) => r.id);
-    if (ids.length) await table.bulkDelete(ids);
+  for (const table of SYNC_TABLES) {
+    for (const row of getTable(table)) {
+      if (isSample(row.id)) await remove(table, row.id);
+    }
   }
 }

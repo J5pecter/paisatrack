@@ -33,11 +33,21 @@ const WORKER_ORIGIN: string = (() => {
   const raw = process.env.VITE_WORKER_ORIGIN?.trim();
   if (!raw) return '';
   try {
-    const { origin, protocol } = new URL(raw);
-    // An http: Worker would silently downgrade everything the page sends it,
-    // and `upgrade-insecure-requests` would rewrite it anyway.
-    if (protocol !== 'https:') {
-      throw new Error(`VITE_WORKER_ORIGIN must be https. Got: ${raw}`);
+    const { origin, protocol, hostname } = new URL(raw);
+
+    /*
+      https, except on the loopback address.
+
+      An http: Worker on a real host would silently downgrade everything the
+      page sends it, and `upgrade-insecure-requests` would rewrite the request
+      anyway. localhost is the documented exception: browsers already treat it
+      as a secure context, and `wrangler dev` serves plain HTTP on
+      http://localhost:8787 — so rejecting it would mean nobody could develop
+      against their own Worker without deploying it first.
+    */
+    const loopback = hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '[::1]';
+    if (protocol !== 'https:' && !loopback) {
+      throw new Error(`VITE_WORKER_ORIGIN must be https (or a localhost address). Got: ${raw}`);
     }
     return origin;
   } catch (e) {

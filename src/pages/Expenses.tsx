@@ -214,7 +214,7 @@ export function Expenses() {
       skipEmptyLines: true,
       complete: async (result) => {
         try {
-          // Every row is validated and sanitised before it can reach Dexie.
+          // Every row is validated and sanitised before it can reach the server.
           const { rows: valid, problems } = validateCsvRows(result.data, toPaise);
 
           const now = new Date().toISOString();
@@ -580,7 +580,7 @@ export function Expenses() {
         open={confirmDelete !== null}
         onOpenChange={(open) => !open && setConfirmDelete(null)}
         title={`Delete ${confirmDelete?.length === 1 ? 'this expense' : `${confirmDelete?.length} expenses`}?`}
-        description="This cannot be undone from the app, though the change is recorded in your GitHub sync history if sync is on."
+        description="This deletes it from your server, for every device. There is no undo and no version history — restore from a backup file if you need it back."
         confirmLabel="Delete"
         onConfirm={() => confirmDelete && void deleteSelected(confirmDelete)}
       />

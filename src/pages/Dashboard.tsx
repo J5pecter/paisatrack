@@ -560,7 +560,7 @@ function FirstRun() {
       <EmptyState
         icon={SparkleIcon}
         title="Welcome to PaisaTrack"
-        description="Track your salary, credit cards, EMIs, bills and expenses — all stored on this device, and optionally synced to your own private GitHub repo. Nothing leaves your control."
+        description="Track your salary, credit cards, EMIs, bills and expenses. Everything is stored on the Cloudflare Worker you deployed — your account, your database, nobody else's — so it follows you between devices."
         action={
           <div className="flex flex-col gap-2 sm:flex-row">
             <Button onClick={() => void loadSample()} disabled={loading}>

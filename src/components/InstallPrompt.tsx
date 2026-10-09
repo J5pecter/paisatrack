@@ -157,7 +157,7 @@ function IOSSteps() {
         <span aria-hidden>3.</span>
         <span>
           Tap <strong className="text-[var(--color-foreground)]">Add</strong>. PaisaTrack opens
-          full-screen from then on, and works offline.
+          full-screen from then on.
         </span>
       </li>
     </ol>
@@ -191,7 +191,7 @@ export function InstallBanner() {
         <div className="min-w-0 flex-1">
           <p className="text-sm font-medium">Keep PaisaTrack on your home screen</p>
           <p className="mt-0.5 text-xs text-[var(--color-muted-foreground)]">
-            Opens full-screen, works offline, no app store.
+            Opens full-screen, launches like an app, no app store.
           </p>
 
           <div className="mt-2.5 flex flex-wrap items-center gap-2">
@@ -265,8 +265,9 @@ export function InstallCard({ className }: { className?: string }) {
         <div className="min-w-0 flex-1">
           <p className="text-sm font-medium">Install on this device</p>
           <p className="mt-0.5 text-xs text-[var(--color-muted-foreground)]">
-            Adds PaisaTrack to your home screen. It opens full-screen without browser chrome, and
-            works offline. Nothing is downloaded from an app store and nothing is sent anywhere.
+            Adds PaisaTrack to your home screen, so it opens full-screen without browser chrome.
+            Nothing is downloaded from an app store. It still needs a connection — your records live
+            on your server, not on the phone.
           </p>
 
           {state === 'PROMPTABLE' && (

@@ -1,20 +1,29 @@
 /**
- * Where the optional Cloudflare Worker lives, and the secret that reaches it.
+ * Where the Cloudflare Worker lives, and the secret that reaches it.
  *
- * Optional is the operative word. Every feature that touches this is an
- * addition to something that already works on the device: statement OCR falls
- * back to the local engine, and reminders simply do not fire. Nothing here is
- * on the path of any figure the app computes, and the app must never behave as
- * though it is.
+ * This used to be optional. It is not any more: the app's records live on the
+ * Worker, so without this config there is nothing to show. OCR and reminders
+ * remain separate opt-ins on top of it, but the URL and token themselves are
+ * now the difference between a working app and a setup screen.
  *
- * The token is stored beside the GitHub token, in IndexedDB, for the same
- * reason and with the same honesty: anyone holding the unlocked device has it.
- * It is not protecting the user's data — the Worker stores none — it is
- * stopping a stranger who finds the URL from spending the free neuron budget.
+ * ## Why localStorage and not IndexedDB
+ *
+ * Not a style choice. This config is the key to the database, so it cannot
+ * live in the database — and the boot path needs it synchronously, before the
+ * first request and before React renders anything.
+ *
+ * ## What the token protects now
+ *
+ * It began life as a quota guard: something to stop a stranger who found the
+ * URL from spending the free neuron budget. It is the lock on the entire
+ * financial history now.
+ *
+ * Anyone holding the unlocked device has it, exactly as before. But anyone
+ * holding the *token* has the data from anywhere in the world, which is a
+ * materially larger consequence than it was a day ago, and the settings screen
+ * says so rather than leaving it implied.
  */
-import { db } from '@/lib/db/schema';
-
-const SETTINGS_KEY = 'worker';
+const SETTINGS_KEY = 'paisatrack.worker';
 
 export interface WorkerConfig {
   /** Origin of the deployed Worker, e.g. https://paisatrack.yourname.workers.dev */
@@ -34,17 +43,35 @@ export const DEFAULT_WORKER_CONFIG: Omit<WorkerConfig, 'url' | 'token'> = {
   leadDays: 3,
 };
 
+/**
+ * Read the config synchronously.
+ *
+ * The async wrappers below exist because every caller already awaits them;
+ * this is the one the boot path uses, before React has rendered anything.
+ */
+export function readWorkerConfig(): WorkerConfig | null {
+  try {
+    const raw = localStorage.getItem(SETTINGS_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as WorkerConfig;
+    return parsed?.url && parsed?.token ? parsed : null;
+  } catch {
+    // Corrupt or unavailable storage (private mode, disabled cookies) is a
+    // "not configured" state, not a crash on the first paint.
+    return null;
+  }
+}
+
 export async function loadWorkerConfig(): Promise<WorkerConfig | null> {
-  const row = await db._settings.get(SETTINGS_KEY);
-  return (row?.value as WorkerConfig) ?? null;
+  return readWorkerConfig();
 }
 
 export async function saveWorkerConfig(config: WorkerConfig): Promise<void> {
-  await db._settings.put({ key: SETTINGS_KEY, value: { ...config, url: normaliseUrl(config.url) } });
+  localStorage.setItem(SETTINGS_KEY, JSON.stringify({ ...config, url: normaliseUrl(config.url) }));
 }
 
 export async function clearWorkerConfig(): Promise<void> {
-  await db._settings.delete(SETTINGS_KEY);
+  localStorage.removeItem(SETTINGS_KEY);
 }
 
 /**
@@ -84,7 +111,12 @@ export interface WorkerCall {
 
 /** Config for calling the Worker, or null when it is not usable. */
 export async function workerCall(): Promise<WorkerCall | null> {
-  const config = await loadWorkerConfig();
+  return callSync();
+}
+
+/** The synchronous form, for the boot path and for code that cannot await. */
+export function callSync(): WorkerCall | null {
+  const config = readWorkerConfig();
   if (!config?.url || !config.token) return null;
   return { url: normaliseUrl(config.url), token: config.token };
 }

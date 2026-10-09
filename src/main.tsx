@@ -1,11 +1,11 @@
-import { StrictMode, Suspense, useEffect } from 'react';
+import { StrictMode, Suspense } from 'react';
 import { createRoot } from 'react-dom/client';
 import { RouterProvider } from '@tanstack/react-router';
 import { Toaster } from 'sonner';
 import { router } from '@/routes/router';
 import { useGlobalShortcuts } from '@/components/CommandPalette';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
-import { syncEngine } from '@/lib/sync/engine';
+import { BootGate } from '@/components/BootGate';
 import { initTheme, useUI } from '@/stores/ui';
 import './index.css';
 
@@ -15,17 +15,18 @@ function App() {
   const theme = useUI((s) => s.theme);
   useGlobalShortcuts();
 
-  useEffect(() => {
-    // Sync is optional: start() returns immediately when no token is configured.
-    void syncEngine.start();
-    return () => syncEngine.stop();
-  }, []);
-
   return (
     <ErrorBoundary>
-      <Suspense fallback={null}>
-        <RouterProvider router={router} />
-      </Suspense>
+      {/*
+        BootGate is outside Suspense on purpose: it owns the "we have no data
+        yet" state, and wrapping it in a boundary that renders null would show
+        a blank page instead of the reason.
+      */}
+      <BootGate>
+        <Suspense fallback={null}>
+          <RouterProvider router={router} />
+        </Suspense>
+      </BootGate>
       <Toaster
         theme={theme}
         position="bottom-right"

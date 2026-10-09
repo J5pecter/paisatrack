@@ -22,7 +22,7 @@ import {
   DialogTitle,
   TooltipProvider,
 } from '@/components/ui';
-import { SyncIndicator } from './SyncIndicator';
+import { ServerIndicator } from './ServerIndicator';
 import { useUI } from '@/stores/ui';
 import { cn } from '@/lib/utils';
 
@@ -111,7 +111,7 @@ export function AppShell() {
               </kbd>
             </button>
 
-            <SyncIndicator />
+            <ServerIndicator />
 
             {/*
               The label is hidden below sm:, so without aria-label this button

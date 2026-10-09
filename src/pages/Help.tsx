@@ -8,7 +8,6 @@
 import * as React from 'react';
 import {
   Badge,
-  Button,
   Card,
   CardContent,
   CardHeader,
@@ -17,14 +16,13 @@ import {
 import {
   CalculatorIcon,
   CardIcon,
-  GithubIcon,
+  CloudIcon,
   LockIcon,
   RupeeIcon,
-  ShieldIcon,
   TipIcon,
 } from '@/components/icons';
 import { PageHeader } from '@/components/layout/AppShell';
-import { CopyButton, Expandable } from '@/components/Chrome';
+import { Expandable } from '@/components/Chrome';
 import { formatINR, toPaise } from '@/lib/finance/money';
 import { interestForDays, simulateMinimumPayments } from '@/lib/finance/creditCard';
 
@@ -61,32 +59,44 @@ export function Help() {
           </CardHeader>
           <CardContent className="pt-0">
             <Expandable question="Where is my data stored?" defaultOpen>
-              In this browser, in IndexedDB. That is the only copy unless you turn
-              on sync, in which case a second copy lives in a private GitHub repo
-              that you own. There is no PaisaTrack server — there is nowhere else
-              for it to be.
+              On the Cloudflare Worker you deployed — your account, your database,
+              running on their free plan. That is the only copy, which is what lets
+              it follow you between devices, and is also why the backup below
+              matters. There is no PaisaTrack company server and no shared
+              database; nobody but you has the token that reaches yours.
             </Expandable>
 
             <Expandable question="What happens if I clear my browser data?">
-              It is gone from this device. That is the honest answer, and it is
-              why two safety nets exist: <strong>Download backup</strong> in
-              Settings gives you a JSON file you keep, and GitHub sync keeps a
-              copy with full version history. Use at least one.
+              Nothing happens to your records — they are on the server, not in the
+              browser. All you lose is the saved server address and token, which you
+              paste back in.
+              <strong className="mt-2 block">
+                The real risk moved rather than disappearing.
+              </strong>
+              Losing the Cloudflare account, or deleting the database, takes
+              everything, and no device holds a replica.{' '}
+              <strong>Download backup</strong> in Settings writes a JSON file to your
+              own disk. It is now the only copy that does not depend on the server —
+              take one periodically.
             </Expandable>
 
             <Expandable question="Can PaisaTrack see my finances?">
-              No. There is no server to send anything to. The only network request
-              this app can make is to <code>api.github.com</code>, and the browser
-              enforces that — the Content Security Policy names that one host and
-              blocks everything else.
+              No. There is no PaisaTrack company and no shared database. The server
+              your data sits on is one you created in your own Cloudflare account,
+              and the token that reaches it is one you generated. The app can only
+              talk to the origin named in its Content Security Policy — the browser
+              enforces that, and it is your Worker.
             </Expandable>
 
-            <Expandable question="Is my GitHub token safe?">
-              It is stored in this browser&rsquo;s IndexedDB, masked once saved,
-              and sent only to <code>api.github.com</code>. It is never logged and
-              never placed in a URL. Use a <strong>fine-grained</strong> token
-              scoped to the one data repo with Contents access only — then even if
-              it leaked, it reaches nothing else. Disconnect in Settings removes it.
+            <Expandable question="How protected is my server token?">
+              Treat it as the password to your finances, because that is what it is
+              now. It is stored in this browser, masked once saved, sent only to
+              your Worker, never logged and never placed in a URL.
+              <strong className="mt-2 block">Anyone holding it has your data.</strong>
+              Not just on your device — from anywhere. If you think it has leaked,
+              change <code>API_TOKEN</code> on the Worker
+              (<code>wrangler secret put API_TOKEN</code>) and paste the new one into
+              Settings. The old one stops working immediately.
             </Expandable>
 
             <Expandable question="Someone has my unlocked laptop. What can they see?">
@@ -101,46 +111,53 @@ export function Help() {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base">
-              <GithubIcon className="h-5 w-5" weight="fill" />
-              Sync and cost
+              <CloudIcon className="h-5 w-5 text-[var(--color-primary)]" weight="duotone" />
+              Your server and what it costs
             </CardTitle>
           </CardHeader>
           <CardContent className="pt-0">
-            <Expandable question="Do I have to use GitHub sync?" defaultOpen>
-              No. Without a token this is a complete, working, local-only tracker.
-              Sync exists so a second device sees the same data, and so every save
-              becomes a commit you can restore from.
+            <Expandable question="Why do I need to run a server?" defaultOpen>
+              Because that is where your records are. PaisaTrack used to keep them
+              in whichever browser typed them, which meant your phone and your
+              laptop held different data and neither was complete. One database that
+              every device reads is simpler to reason about and simpler to trust.
+              <strong className="mt-2 block">The cost is that it needs a connection.</strong>
+              Nothing is cached on the device, so with no network there is nothing
+              to show. That was a deliberate trade for never wondering which copy is
+              the real one.
             </Expandable>
 
             <Expandable question="Will this ever cost money?">
-              No. Everything here is on GitHub&rsquo;s permanently free tier —
-              Pages for hosting, a private repo for data, Actions for the nightly
-              backup. No card at any step. If a feature ever needed a paid
-              service, it would not be built.
+              No. GitHub Pages hosts the app; Cloudflare&rsquo;s free Workers plan
+              runs the server and its database. Neither asked for a card. The D1
+              free allowance is 5 GB and 100,000 row-writes a day, against which one
+              person&rsquo;s finances are a rounding error — a few megabytes and
+              perhaps fifty writes. If a feature ever needed a paid service, it would
+              not be built.
             </Expandable>
 
-            <Expandable question="Will I hit GitHub's rate limit?">
-              Very unlikely. The limit is 5,000 requests an hour; normal use is
-              around 100 a day. Polling uses a conditional request, so when
-              nothing has changed GitHub answers 304 and it costs nothing at all.
-              PaisaTrack also caps its own outbound calls, so a bug cannot burn
-              your quota.
+            <Expandable question="Will I run out of free quota?">
+              Realistically no. Cloudflare allows 100,000 requests a day and
+              PaisaTrack makes one per change plus one per app open. The one
+              allowance worth watching is Workers AI, at 10,000 neurons a day —
+              roughly 50 to 150 statement pages — and only if you use server OCR.
+              Running out makes that feature return an error until the next day;
+              nothing else is affected, and Cloudflare does not ask for a card.
             </Expandable>
 
             <Expandable question="What if I edit on two devices at once?">
-              Last write wins, decided by timestamp. If the timestamps tie, a
-              device identifier breaks it — arbitrary, but both devices reach the
-              same answer, which is what stops them disagreeing forever. Deletions
-              are recorded as deletions, so deleting on one device is never undone
-              by the other.
+              Nothing clever happens, because nothing needs to. Both devices read and
+              write the same database, so the later save is simply the current value
+              — the same as two browser tabs open on one spreadsheet. The older
+              version of this app needed conflict resolution, timestamps and
+              tiebreakers precisely because each device had its own copy.
             </Expandable>
 
             <Expandable question="How do I restore an old version?">
-              Three ways: <strong>Settings → Restore from file</strong> with a
-              downloaded backup; copy a file out of <code>snapshots/</code> in
-              your data repo over <code>data.json</code>; or
-              <code> git checkout &lt;commit&gt; -- data.json</code>. Then open
-              PaisaTrack and press Sync now.
+              From a backup file: <strong>Settings → Restore from file</strong>. That
+              is the only route, which makes taking one occasionally worth the ten
+              seconds. There is no version history on the server — D1 stores the
+              current value of each record, not its past.
             </Expandable>
           </CardContent>
         </Card>
@@ -239,59 +256,62 @@ export function Help() {
       <Card className="mt-5">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
-            <ShieldIcon className="h-5 w-5 text-[var(--color-primary)]" weight="duotone" />
-            Setting up sync
+            <CloudIcon className="h-5 w-5 text-[var(--color-primary)]" weight="duotone" />
+            Setting up your server
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <ol className="space-y-3 text-sm">
+        <CardContent className="space-y-4 text-sm">
+          <p className="text-[var(--color-muted-foreground)]">
+            Once, in about five minutes, with no credit card. The full guide is{' '}
+            <code>worker/README.md</code> in the repository; this is the shape of it.
+          </p>
+
+          <ol className="space-y-2.5 text-sm">
             <li className="flex gap-3">
               <Badge variant="outline" className="h-5 shrink-0">1</Badge>
               <span>
-                Create a <strong>private</strong> repo named{' '}
-                <code className="rounded bg-[var(--color-muted)] px-1">paisatrack-data</code>.
-                <CopyButton value="paisatrack-data" label="Copy name" className="ml-2 align-middle" />
+                Create a free Cloudflare account, then from the <code>worker/</code> folder run{' '}
+                <code>npx wrangler login</code>.
               </span>
             </li>
             <li className="flex gap-3">
               <Badge variant="outline" className="h-5 shrink-0">2</Badge>
               <span>
-                GitHub → Settings → Developer settings → Personal access tokens →{' '}
-                <strong>Fine-grained tokens</strong>.
+                Create the database and the push store —{' '}
+                <code>npx wrangler d1 create paisatrack</code> and{' '}
+                <code>npx wrangler kv namespace create PUSH</code> — and paste both ids into{' '}
+                <code>wrangler.toml</code>.
               </span>
             </li>
             <li className="flex gap-3">
               <Badge variant="outline" className="h-5 shrink-0">3</Badge>
               <span>
-                Scope it to <strong>only</strong> that repo, with{' '}
-                <strong>Contents: Read and write</strong>. Nothing else.
+                Set a long random <code>API_TOKEN</code> secret. This is the password to your
+                finances, so generate it rather than inventing it.
               </span>
             </li>
             <li className="flex gap-3">
               <Badge variant="outline" className="h-5 shrink-0">4</Badge>
-              <span>Paste it into Settings → GitHub sync → Connect.</span>
+              <span>
+                <code>npx wrangler deploy</code>, then set the repository variable{' '}
+                <code>VITE_WORKER_ORIGIN</code> to the URL it prints and redeploy the site.
+              </span>
+            </li>
+            <li className="flex gap-3">
+              <Badge variant="outline" className="h-5 shrink-0">5</Badge>
+              <span>Paste the URL and token into Settings → Your server.</span>
             </li>
           </ol>
 
           <div className="flex items-start gap-2 rounded-md border border-[var(--color-border)] p-3 text-xs">
             <TipIcon className="mt-0.5 h-4 w-4 shrink-0 text-[var(--color-info)]" weight="duotone" />
             <p className="text-[var(--color-muted-foreground)]">
-              Give the token an expiry. When it lapses, sync stops and says so —
-              which is a far better failure than a token that works forever.
+              Step 4 is the one people miss. The app&rsquo;s Content Security Policy names your
+              Worker&rsquo;s origin at build time, so until the site is rebuilt with it the browser
+              blocks the request before it is sent — and the Worker&rsquo;s own logs stay empty,
+              because nothing ever arrived. Settings checks for this and says so.
             </p>
           </div>
-
-          <Button asChild variant="outline" size="sm">
-            <a
-              href="https://github.com/settings/personal-access-tokens/new"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="gap-1.5"
-            >
-              <GithubIcon className="h-4 w-4" weight="fill" />
-              Create a token on GitHub
-            </a>
-          </Button>
         </CardContent>
       </Card>
 

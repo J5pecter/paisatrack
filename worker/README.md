@@ -1,15 +1,17 @@
-# PaisaTrack's optional server
+# PaisaTrack's server
 
-A Cloudflare Worker that adds two things to PaisaTrack and is required for
-neither:
+A Cloudflare Worker that holds your data and adds two optional extras:
 
+- **Your records** — every expense, card, loan and bill, in a D1 database in
+  your own Cloudflare account. This is not optional: without it the app has
+  nothing to show.
 - **Server OCR** — reads a scan the on-device engine cannot manage, using a
-  vision model on Cloudflare's GPUs.
+  vision model on Cloudflare's GPUs. Opt-in, per file.
 - **Due-payment reminders** — a push notification while the app is closed.
+  Opt-in.
 
-With this undeployed, unconfigured or offline, PaisaTrack works exactly as it
-does today: OCR falls back to the on-device engine and reminders do not fire.
-Nothing here is on the path of any figure the app computes.
+The last two have their own switches in Settings. Setting up the server does
+not turn either of them on.
 
 **Cost: ₹0. No credit card at any point.** Everything below is inside
 Cloudflare's free plan.
@@ -28,11 +30,24 @@ Worker does is I/O-bound on purpose:
 
 | Work | Where it happens | CPU cost here |
 | --- | --- | --- |
+| Reading every record | D1, returned as stored text | a wait, plus string joins |
 | Base64-encoding the image | The browser, before upload | none |
 | Reading the page | Cloudflare's GPUs, via the AI binding | a wait, not work |
 | Signing a push | One ECDSA signature | well under 1ms |
 
 ## What the server learns
+
+**Your records:** all of them. That is the point — it is the database.
+
+They are stored as the JSON the app sent, in one table, in your account. The
+Worker never parses a record and has no idea what a rupee is; it stores and
+returns text. Every figure you see is computed in your browser from these rows.
+
+**The token is the lock on all of it.** While the data was local, the trust
+boundary was your device — it was as safe as your unlocked phone. It is
+reachable at a URL now, and `API_TOKEN` is the only thing between a stranger
+and your complete financial history. Generate it, do not invent it, and never
+commit it.
 
 **Server OCR:** the page you pressed the button on. It is held in memory for one
 request and written nowhere. This is the only thing in PaisaTrack that uploads a
@@ -58,18 +73,25 @@ npm install
 npx wrangler login
 ```
 
-### 2. A KV namespace for push subscriptions
+### 2. The database, and a KV namespace for push subscriptions
+
+```bash
+npx wrangler d1 create paisatrack
+```
 
 ```bash
 npx wrangler kv namespace create PUSH
 ```
 
-Copy the `id` it prints into `wrangler.toml`, replacing
-`REPLACE_WITH_YOUR_KV_NAMESPACE_ID`.
+Each prints an id. Paste them into `wrangler.toml` over
+`REPLACE_WITH_YOUR_D1_DATABASE_ID` and `REPLACE_WITH_YOUR_KV_NAMESPACE_ID`.
+
+There is no migration step: the Worker creates its own table on first use.
 
 ### 3. Secrets
 
-A shared token. Any long random string — this one is generated for you:
+A shared token, and it is now the password to your finances rather than a quota
+guard. Generate it:
 
 ```bash
 node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"
@@ -79,8 +101,8 @@ node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"
 npx wrangler secret put API_TOKEN
 ```
 
-It stops a stranger who finds your Worker URL spending your daily AI
-allocation. It is not protecting data, because the Worker stores none.
+Anyone holding this can read and write your entire financial history from
+anywhere in the world. Use the generated value; do not pick something memorable.
 
 Then the push keys. Run this **once** — regenerating invalidates every existing
 subscription:
@@ -115,8 +137,9 @@ Note the URL it prints — something like
 curl https://paisatrack.your-name.workers.dev/health
 ```
 
-Expect `{"ok":true,"ai":true,"push":true}`. If `push` is `false`, the VAPID
-secrets did not take.
+Expect `{"ok":true,"ai":true,"push":true,"db":true}`. If `push` is `false` the
+VAPID secrets did not take; if `db` is `false` the D1 id in `wrangler.toml` is
+wrong.
 
 ### 6. Allow the origin in PaisaTrack's CSP
 
@@ -144,12 +167,16 @@ permits and says so plainly if they disagree.
 
 ### 7. Switch it on
 
-**Settings → Optional server.** Paste the URL and the token, press **Save**, then
-**Test connection**.
+**Settings → Your server.** Paste the URL and the token, press **Save**, then
+**Test connection**. The app loads as soon as it can reach the Worker.
 
-Saving switches nothing on. The two features have separate toggles, because
-they have genuinely different consequences — one uploads statements and the
-other uploads dates.
+If you used PaisaTrack before this change, it will offer to move the records
+sitting in your browser to the server. It copies rather than moves — the old
+local database is left untouched until you choose to delete it.
+
+OCR and reminders stay off until you switch them on. They have separate toggles
+because they have genuinely different consequences: one uploads statements and
+the other uploads dates.
 
 ---
 
@@ -157,7 +184,10 @@ other uploads dates.
 
 | | Free allowance | What this uses it for |
 | --- | --- | --- |
-| Requests | 100,000/day | One per OCR, one per schedule upload, one per push |
+| D1 storage | 5 GB | A few MB. Years of records. |
+| D1 row writes | 100,000/day | One per change. Perhaps fifty. |
+| D1 row reads | 5,000,000/day | One per record per app open. |
+| Requests | 100,000/day | One per change, one per app open, one per push |
 | Workers AI | 10,000 neurons/day | Roughly 50–150 statement pages |
 | KV reads | 100,000/day | One per subscription per daily cron |
 | KV writes | 1,000/day | One per schedule change, one per notification sent |
@@ -180,12 +210,18 @@ npx wrangler kv key list --binding PUSH   # who is subscribed
 npx wrangler deploy                  # redeploy after a change
 ```
 
-To take the whole thing down:
+```bash
+npx wrangler d1 execute paisatrack --remote --command "SELECT tbl, COUNT(*) FROM records GROUP BY tbl"
+```
+
+## Before you delete anything
 
 ```bash
 npx wrangler delete
 ```
 
-Then clear the URL in PaisaTrack's Settings. The app returns to working entirely
-on the device, with nothing to migrate and nothing lost — which is the property
-worth preserving, and the reason none of this was built as a dependency.
+**This destroys your data.** The database goes with the Worker and no device
+holds a replica — that is the trade this architecture made. Take
+**Settings → Download backup** first; it writes a JSON file you keep, and it is
+the only copy that does not depend on Cloudflare. Restoring it needs nothing but
+a new Worker and **Settings → Restore from file**.

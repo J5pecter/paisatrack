@@ -12,7 +12,7 @@
  *
  * A malformed backup can corrupt the database just as thoroughly as a malicious
  * request can corrupt a server. Everything above is parsed through Zod before it
- * is allowed anywhere near Dexie.
+ * is allowed anywhere near the database.
  *
  * The schemas are deliberately *lenient about shape* and *strict about meaning*:
  * an unknown field is dropped rather than rejected (so an older build can read a
